@@ -9,18 +9,17 @@
 // | Author: liu21st <liu21st@gmail.com>
 // +----------------------------------------------------------------------
 
-// +----------------------------------------------------------------------
-// | 缓存设置
-// +----------------------------------------------------------------------
-use think\facade\Env;
+namespace think\swoole\facade;
 
-return [
-    // 驱动方式
-    'type'   => 'File',
-    // 缓存保存目录
-    'path'   => Env::get('root_path'). 'runtime/cache',
-    // 缓存前缀
-    'prefix' => 'df',
-    // 缓存有效期 0表示永久缓存
-    'expire' => 3600,
-];
+use think\Facade;
+
+/**
+ * @see \think\swoole\Http
+ * @mixin \think\swoole\Http
+ * @method void option(array $option) static 参数设置
+ * @method void start() static 启动服务
+ * @method void stop() static 停止服务
+ */
+class Http extends Facade
+{
+}
