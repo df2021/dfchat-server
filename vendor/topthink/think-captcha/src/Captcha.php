@@ -144,7 +144,8 @@ class Captcha
         }
 
         if ($this->authcode(strtoupper($code)) == $secode['verify_code']) {
-            $this->reset && cache($key,null);
+//            $this->reset && cache($key,null);
+            cache($key,null);
             return true;
         }
 
