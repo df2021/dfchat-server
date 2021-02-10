@@ -52,7 +52,9 @@ class Swoole extends Server
                 if($send_mid>0){
                     //
                     $requestAction = $data['action'];
+                    $nowTime = time();
                     switch ($requestAction) {
+                        //初始连接绑定客户端
                         case 'connected':
                             $client = [
                                 'user_id'=>$send_mid,
@@ -60,28 +62,300 @@ class Swoole extends Server
                                 'fd' => $frame->fd
                             ];
                             //redis 先存入,如果没有存入成功再存mysql数据库 todo
+                            //若服务器异常情况下没有清除绑定的客户端数据，先删除
+                            Db::table('df_socket_client')->where('fd',$frame->fd)->where('user_id',$send_mid)->delete(true);
                             $id = Db::table('df_socket_client')->insert($client);
                             if($id>0){
-                                $server->push($frame->fd,'与服务器连接绑定成功');
+                                $res = [
+                                    'type' => 'connect',
+                                    'data' => '与服务器连接绑定成功'
+                                ];
+                                $res = json_encode($res,JSON_UNESCAPED_UNICODE);
+                                $server->push($frame->fd,$res);
                             }
                             break;
+                        //拉取验证、好友、群列表信息
+                        case 'pullList':
+                            $list = [];
+                            //验证
+                            $apply_list = Db::table('df_apply')->where('to_mid',$send_mid)->select();
+                            foreach ($apply_list as $apply)
+                            {
+                                $one['userId'] = $apply['send_mid'];
+                                $one['name'] = '验证消息';//可根据type字段来自定义
+                                $one['images'] = $apply['icon'];
+                                $one['updateTime'] = uc_time_ago($apply['update_time']) ;
+                                $one['listType'] = 3;
+                                $one['status'] = $apply['status'];
+                                $one['msg'] = $apply['content'];
+                                $one['type'] = $apply['type'];
+                                $one['dataId'] = $apply['id'];
+                                array_push($list,$one);
+                            }
+
+                            //好友
+                            $friend_ids = Db::table('df_friends')
+                                ->where('mid',$send_mid)
+                                ->where('status',1)
+                                ->column('friend_mid');
+                            if(!empty($friend_ids)){
+                                $friends = Db::table('df_member')
+                                    ->where('id','in',$friend_ids)
+                                    ->where('status',1)
+                                    ->field('id,username,avatar')
+                                    ->limit(500)
+                                    ->select();
+                                foreach ($friends as $k => $friend){
+
+                                    //每一条最近的信息
+                                    $to_mid = $friend['id'];
+                                    $map1= [
+                                        ['send_mid','=',$to_mid],
+                                        ['to_mid','=',$send_mid]
+                                    ];
+                                    $map2= [
+                                        ['send_mid','=',$send_mid],
+                                        ['to_mid','=',$to_mid]
+                                    ];
+                                    $last_msg = Db::table('df_message')
+                                        ->whereOr($map1,$map2)
+                                        ->field('id,type,content,status,update_time,send_time,read_time,receive_time')
+                                        ->order('id','desc')
+                                        ->find();
+
+                                    $one['userId'] = $friend['id'];
+                                    $one['name'] = !empty($friend['nickname']) ? $friend['nickname'] : $friend['username'];//可根据type字段来自定义
+                                    $one['images'] = $friend['avatar'];
+                                    $one['listType'] = 1;
+                                    $one['updateTime'] = '' ;
+                                    $one['msg'] = '';
+                                    $one['status'] = '';
+                                    $one['dataId'] = '';
+                                    if(!empty($last_msg)){
+                                        $one['updateTime'] = uc_time_ago($last_msg['update_time']) ;
+                                        $one['status'] = $last_msg['status'];
+                                        $one['msg'] = $last_msg['content'];
+                                        $one['type'] = $last_msg['type'];
+                                        $one['dataId'] = $last_msg['id'];
+                                    }
+                                    array_push($list,$one);
+
+                                }
+
+                            }
+
+                            //群组
+                            $group_ids = Db::table('df_member')->where('id',$send_mid)->value('groups');
+                            if(!empty($group_ids)){
+                                $group_ids = explode(',',$group_ids);
+                                $groups = Db::table('df_group')
+                                    ->where('id','in',$group_ids)
+                                    ->where('status',1)
+                                    ->field('id,name,icon')
+                                    ->limit(50)
+                                    ->select();
+                                if(!empty($groups)){
+                                    //查找群里最近一条消息
+                                    foreach ($groups as $group){
+                                        $last_group_msg = Db::table('df_message_group')
+                                            ->where('group_id',$group['id'])
+                                            ->field('id,content,type,status,send_time,read_time,receive_time')
+                                            ->order('id','desc')
+                                            ->find();
+                                        $one['userId'] = $group['created_mid'];
+                                        $one['groupId'] = $group['send_mid'];
+                                        $one['name'] = $group['name'];
+                                        $one['images'] = $group['icon'];
+                                        $one['listType'] = 2;
+                                        $one['updateTime'] = '' ;
+                                        $one['msg'] = '';
+                                        $one['status'] = '';
+                                        $one['dataId'] = '';
+                                        if(!empty($last_group_msg)){
+                                            $one['updateTime'] = uc_time_ago($last_group_msg['update_time']) ;
+                                            $one['msg'] = $last_group_msg['content'];
+                                            $one['type'] = $last_group_msg['type'];
+                                            $one['status'] = $last_group_msg['status'];
+                                            $one['dataId'] = $last_group_msg['id'];
+                                        }
+                                        array_push($list,$one);
+                                    }
+
+                                }
+                            }
+
+                            $res = [
+                                'type'=>'pullList',
+                                'data'=>$list
+                            ];
+                            $res = json_encode($res,JSON_UNESCAPED_UNICODE);
+                            $server->push($frame->fd,$res);
+                            break;
+                        //添加好友
                         case 'addFriend':
+                            $to_mid = $data['to_mid'];
+                            $content = $data['content'];
+
+                            $apply_id = Db::table('df_apply')
+                                ->where('send_mid',$send_mid)
+                                ->where('to_mid',$to_mid)
+                                ->value('id');
+                            if($apply_id>0){
+                                $server->push($frame->fd,'已发出过同样的申请');
+                            }else{
+                                $insert_data = [
+                                    'send_mid' => $send_mid,
+                                    'to_mid' => $to_mid,
+                                    'type' => 1,
+                                    'status' => 0,
+                                    'content' => $content,
+                                    'create_time' => $nowTime,
+                                    'update_time' => $nowTime
+                                ];
+
+                                $insert_id = Db::table('df_apply')->insert($insert_data,false,true,'id');
+                                if($insert_id>0){
+                                    //如果对方在线，向对方发送验证通知 redis优化 todo
+                                    $to_fds = Db::table('df_socket_client')->where('user_id',$to_mid)->column('fd');
+                                    if(!empty($to_fds)){
+                                        $insert_data['id'] = $insert_id;
+                                        $res = [
+                                            'type' => 'receiveApply',
+                                            'data' => [
+                                                'dataId'=>$insert_id,
+                                                'userId'=>$send_mid,
+                                                'name'=> '验证消息',
+                                                'images'=>'/static/image/noteico.png',
+                                                'updateTime'=> uc_time_ago($nowTime),
+                                                'listType'=>3,
+                                                'type'=>1,
+                                                'status'=>0,
+                                                'msg'=>$content,
+                                            ]
+                                        ];
+                                        $res = json_encode($res,JSON_UNESCAPED_UNICODE);
+                                        foreach ($to_fds as $fd){
+                                            if($server->isEstablished($fd)){
+                                                $server->push($fd,$res);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
                             break;
+                        //获取好友信息
+                        case 'getFriend':
+                            $friendId = $data['friend_id'];
+                            $friend = Db::table('df_member')
+                                ->where('id',$friendId)
+                                ->where('status',1)
+                                ->find();
+                            if(!empty($friend)){
+                                $is_friend = Db::table('df_friends')
+                                    ->where('mid',$send_mid)
+                                    ->where('friend_mid',$friendId)
+                                    ->where('status',1)
+                                    ->value('id');
+                                $friend['is_friend'] = $is_friend>0 ? 1 : 0;
+                                $friend = json_encode($friend,JSON_UNESCAPED_UNICODE);
+                                $server->push($frame->fd,$friend);
+                            }
+
+                            break;
+                        //处理申请
+                        case 'handleApply':
+                            Db::startTrans();
+                            try {
+                                Db::table('df_apply')
+                                    ->where('id',$data['dataId'])
+                                    ->update(['status'=>1,'update_time'=>$nowTime]);
+                                $I1 = Db::table('df_friends')->insert([
+                                    'mid'=>$data['user_id'],
+                                    'friend_mid'=>$send_mid,
+                                    'status'=>1,
+                                    'create_time' => $nowTime,
+                                    'update_time' => $nowTime,
+                                ],false,true,'id');
+                                $I2 = Db::table('df_friends')->insert([
+                                    'mid'=>$send_mid,
+                                    'friend_mid'=>$data['user_id'],
+                                    'status'=>1,
+                                    'create_time' => $nowTime,
+                                    'update_time' => $nowTime,
+                                ],false,true,'id');
+                                $f1 = Db::table('df_member')->where('id',$send_mid)->find();
+                                $f2 = Db::table('df_member')->where('id',$data['user_id'])->find();
+                                $f1_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
+                                $f2_fds = Db::table('df_socket_client')->where('user_id',$data['user_id'])->column('fd');
+                                Db::commit();
+                                //向对方发送验证通过信息
+                                $res1 = json_encode([
+                                    'type' => 'addedFriend',
+                                    'data' => [
+                                        'dataId'=>$I2,
+                                        'userId'=>$data['user_id'],
+                                        'name'=>$f2['username'],
+                                        'images'=>$f2['avatar'],
+                                        'updateTime'=> uc_time_ago($nowTime),
+                                        'listType'=>1,
+                                        'type'=>1,
+                                        'status'=>0,
+                                        'msg'=>'您与'.$f2['username'].'成为好友',
+                                    ]
+                                ],JSON_UNESCAPED_UNICODE);
+                                $res2 = json_encode([
+                                    'type' => 'addedFriend',
+                                    'data' => [
+                                        'dataId'=>$I1,
+                                        'userId'=>$send_mid,
+                                        'name'=>$f1['username'],
+                                        'images'=>$f1['avatar'],
+                                        'updateTime'=> uc_time_ago($nowTime),
+                                        'listType'=>1,
+                                        'type'=>1,
+                                        'status'=>0,
+                                        'msg'=>'您与'.$f1['username'].'成为好友',
+                                    ]
+                                ],JSON_UNESCAPED_UNICODE);
+
+                                if(!empty($f1_fds)){
+                                    foreach ($f1_fds as $fd){
+                                        if($server->isEstablished($fd)){
+                                            $server->push($fd,$res1);
+                                        }
+                                    }
+                                }
+
+                                if(!empty($f2_fds)){
+                                    foreach ($f2_fds as $fd){
+                                        if($server->isEstablished($fd)){
+                                            $server->push($fd,$res2);
+                                        }
+                                    }
+                                }
+
+                            }catch (\Exception $exception){
+                                Db::rollback();
+                            }
+
+                            break;
+                        //搜索好友
                         case 'search':
-                            $words = $data['search_word'];
-                            $list = '';
+                            $words = trim($data['search_word']);
+
                             if(!empty($words)){
                                 $list = Db::table('df_member')
-                                    ->where('username','like','%'.$words.'%')
+                                    //->where('username','like','%'.$words.'%')
+                                    ->where('username','like',$words.'%')
                                     ->field('id,username,nickname,avatar,signature')
                                     ->limit(10)
                                     ->select();
                                 $list = json_encode($list,JSON_UNESCAPED_UNICODE);
+                                $server->push($frame->fd, $list);
                             }
-                            echo $list;
-                            $server->push($frame->fd, $list);
                             break;
+                        //聊天窗口接收消息
                         case 'receiveMsg':
                             $to_mid = $data['user_id'];
                             $send_mid = $data['to_user_id'];
@@ -133,6 +407,7 @@ class Swoole extends Server
                             $msg_list = json_encode($msg_list,JSON_UNESCAPED_UNICODE);
                             $server->push($frame->fd,$msg_list);
                             break;
+                        // 聊天窗口发送消息
                         case 'sendMsg':
 
                             $content = $data['content'];
@@ -150,16 +425,15 @@ class Swoole extends Server
                             }
 
                             //保存消息到数据库
-                            $time = time();
                             $message = [
                                 'send_mid' => $send_mid,
                                 'to_mid' => $to_mid,
                                 'type' => $data['type'],
                                 'status' => 1,
                                 'content' => $content,
-                                'create_time' => $time,
-                                'update_time' => $time,
-                                'send_time' => $time,
+                                'create_time' => $nowTime,
+                                'update_time' => $nowTime,
+                                'send_time' => $nowTime,
                             ];
                             $message_id = Db::table('df_message')->insert($message);
                             if($message_id>0){

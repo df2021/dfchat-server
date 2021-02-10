@@ -101,6 +101,8 @@ class User extends Index
                 return json(['code'=>-1, 'error'=>'验证码错误']);
             }
 
+            //添加默认头像
+            $data['avatar'] = '/static/image/boy.jpg';
             if(true!==model('member')->save($data)){
                 return json(['code'=>-1, 'error'=>'数据错误，注册失败']);
             }
