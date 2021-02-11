@@ -290,18 +290,22 @@ class Swoole extends Server
                                 $f2_fds = Db::table('df_socket_client')->where('user_id',$data['user_id'])->column('fd');
                                 Db::commit();
                                 //向对方发送验证通过信息
+                                $f1_nickname = !empty($f1['nickname']) ? $f1['nickname'] : $f1['username'];
+                                $f2_nickname = !empty($f2['nickname']) ? $f2['nickname'] : $f2['username'];
                                 $res1 = json_encode([
                                     'type' => 'addedFriend',
                                     'data' => [
                                         'dataId'=>$I2,
                                         'userId'=>$data['user_id'],
-                                        'name'=>$f2['username'],
+                                        'name'=>$f2_nickname,
+                                        'firstChar'=> getFirstChar($f2_nickname),
+                                        'signature'=> $f2['signature'],
                                         'images'=>$f2['avatar'],
                                         'updateTime'=> uc_time_ago($nowTime),
                                         'listType'=>1,
                                         'type'=>1,
                                         'status'=>0,
-                                        'msg'=>'您与'.$f2['username'].'成为好友',
+                                        'msg'=>$f2_nickname.'成为您好友',
                                     ]
                                 ],JSON_UNESCAPED_UNICODE);
                                 $res2 = json_encode([
@@ -309,13 +313,15 @@ class Swoole extends Server
                                     'data' => [
                                         'dataId'=>$I1,
                                         'userId'=>$send_mid,
-                                        'name'=>$f1['username'],
+                                        'name'=>$f1_nickname,
+                                        'firstChar'=>getFirstChar($f1_nickname),
+                                        'signature'=> $f1['signature'],
                                         'images'=>$f1['avatar'],
                                         'updateTime'=> uc_time_ago($nowTime),
                                         'listType'=>1,
                                         'type'=>1,
                                         'status'=>0,
-                                        'msg'=>'您与'.$f1['username'].'成为好友',
+                                        'msg'=>$f1_nickname.'成为您的好友',
                                     ]
                                 ],JSON_UNESCAPED_UNICODE);
 
