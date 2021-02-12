@@ -6,6 +6,7 @@ namespace app\http;
 
 use app\http\chat\Index;
 use think\Db;
+use think\db\Where;
 use think\swoole\Server;
 
 class Swoole extends Server
@@ -119,7 +120,7 @@ class Swoole extends Server
                                         ['to_mid','=',$to_mid]
                                     ];
                                     $last_msg = Db::table('df_message')
-                                        ->whereOr($map1,$map2)
+                                        ->whereOr([$map1,$map2])
                                         ->field('id,type,content,status,update_time,send_time,read_time,receive_time')
                                         ->order('id','desc')
                                         ->find();
@@ -411,19 +412,22 @@ class Swoole extends Server
                         case 'getMessage':
                             $to_mid = $data['user_id'];
                             $from_mid = $data['to_user_id'];
+                            $lastId = $data['lastId'];//起始ID
                             $map1= [
+                                ['id','>',$lastId],
                                 ['send_mid','=',$to_mid],
                                 ['to_mid','=',$from_mid]
                             ];
                             $map2= [
+                                ['id','>',$lastId],
                                 ['send_mid','=',$from_mid],
                                 ['to_mid','=',$to_mid]
                             ];
-                            $lastId = $data['lastId'];//分页指针
+
                             $limit = (isset($data['limit']) && $data['limit']<=15) ? $data['limit'] : 15 ;
                             $msg_list = Db::table('df_message')
+//                                ->where('id','>',$lastId)
                                 ->whereOr([$map1,$map2])
-                                ->where('id','>',$lastId)
                                 ->limit($limit)
                                 ->order('create_time','desc')
                                 ->select();
@@ -496,16 +500,14 @@ class Swoole extends Server
                             $message_id = Db::table('df_message')->insert($message,false,true,'id');
                             if($message_id>0){
                                 $message['id'] = $message_id;
+                                $message['update_time'] = '刚刚';
                                 //消息保存成功下发给双方
                                 $res_me = json_encode([
-                                    'type'=>'messageStatus',
-                                    'data'=>[
-                                        'id' => $message_id
-                                    ]
+                                    'type'=>'receiveMassage',
+                                    'data'=>$message
                                 ],JSON_UNESCAPED_UNICODE);
 
                                 $me_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
-                                // 需要先判断是否是正确的websocket连接，否则有可能会push失败
                                 foreach ($me_fds as $fd){
                                     if($server->isEstablished($fd)){
                                         $server->push($fd,$res_me);
