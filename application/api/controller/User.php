@@ -5,6 +5,7 @@ namespace app\api\controller;
 
 
 use app\api\model\Member as MemberModel;
+use app\api\validate\Member;
 use think\captcha\Captcha;
 
 class User extends Index
@@ -70,6 +71,12 @@ class User extends Index
                 'username'  => $param['username'],
                 'password'  => $param['password'],
             ];
+            //验证
+            $validate = new Member();
+            $verification = $validate->scene('login')->check($data);
+            if(true!==$verification){
+                return json(['code'=>-1, 'error'=>$validate->getError()]);
+            }
             $member = new MemberModel();
             $member_info = $member->login($data['username'],$data['password']);
             if($member_info===false){
@@ -100,11 +107,17 @@ class User extends Index
             if(!$captcha->checkApi($data['verify'],$param['token'])){
                 return json(['code'=>-1, 'error'=>'验证码错误']);
             }
-
+            //验证
+            $validate = new Member();
+            $verification = $validate->check($data);
+            if(true!==$verification){
+                return json(['code'=>-1, 'error'=>$validate->getError()]);
+            }
             //添加默认头像
             $data['avatar'] = '/static/image/boy.jpg';
-            if(true!==model('member')->save($data)){
-                return json(['code'=>-1, 'error'=>'数据错误，注册失败']);
+            $memberModel = model('member');
+            if(true!==$memberModel->save($data)){
+                return json(['code'=>-1, 'error'=>$memberModel->getError()]);
             }
 
             //自动登录

@@ -63,8 +63,10 @@ class Swoole extends Server
                                 'fd' => $frame->fd
                             ];
                             //redis 先存入,如果没有存入成功再存mysql数据库 todo
-                            //若服务器异常情况下没有清除绑定的客户端数据，先删除
-                            Db::table('df_socket_client')->where('fd',$frame->fd)->where('user_id',$send_mid)->delete(true);
+                            //若服务器异常情况下没有清除绑定的客户端数据，先清空
+                            if($frame->fd==1){
+                                Db::table('df_socket_client')->delete(true);
+                            }
                             $id = Db::table('df_socket_client')->insert($client);
                             if($id>0){
                                 $res = [
@@ -78,8 +80,12 @@ class Swoole extends Server
                         //拉取验证、好友、群列表信息
                         case 'pullList':
                             $list = [];
-                            //验证
-                            $apply_list = Db::table('df_apply')->where('to_mid',$send_mid)->select();
+                            //验证(未验证的)
+                            $apply_list = Db::table('df_apply')
+                                ->where('to_mid',$send_mid)
+                                ->where('status',0)
+                                ->order('id','desc')
+                                ->select();
                             foreach ($apply_list as $apply)
                             {
                                 $one['userId'] = $apply['send_mid'];
@@ -91,102 +97,88 @@ class Swoole extends Server
                                 $one['status'] = $apply['status'];
                                 $one['msg'] = $apply['content'];
                                 $one['type'] = $apply['type'];
+                                $one['num'] = 1;
                                 $one['dataId'] = $apply['id'];
                                 array_push($list,$one);
                             }
 
-                            //好友
-                            $friend_ids = Db::table('df_friends')
-                                ->where('mid',$send_mid)
-                                ->where('status',1)
-                                ->column('friend_mid');
-                            if(!empty($friend_ids)){
-                                $friends = Db::table('df_member')
-                                    ->where('id','in',$friend_ids)
-                                    ->where('status',1)
-                                    ->field('id,username,avatar')
-                                    ->limit(500)
-                                    ->select();
-                                foreach ($friends as $k => $friend){
-
-                                    //每一条最近的信息
-                                    $to_mid = $friend['id'];
-                                    $map1= [
-                                        ['send_mid','=',$to_mid],
-                                        ['to_mid','=',$send_mid]
-                                    ];
-                                    $map2= [
-                                        ['send_mid','=',$send_mid],
-                                        ['to_mid','=',$to_mid]
-                                    ];
-                                    $last_msg = Db::table('df_message')
-                                        ->whereOr([$map1,$map2])
-                                        ->field('id,type,content,status,update_time,send_time,read_time,receive_time')
-                                        ->order('id','desc')
+                            //好友(未读的)
+                            $map1= [
+                                ['status','=',1],
+                                ['to_mid','=',$send_mid]
+                            ];
+                            $field_friend = 'id,type,send_mid,to_mid,content,status,update_time,send_time,read_time,receive_time';
+                            $subQuery_friend = Db::table('df_message')
+                                ->field($field_friend)
+                                ->where($map1)
+                                ->order('update_time','desc')
+                                ->buildSql();
+                            $last_msg = Db::table($subQuery_friend.' f')
+                                ->field($field_friend.', count(f.status) as num')
+                                ->group('send_mid')
+                                ->limit(500)
+                                ->select();
+                            if(!empty($last_msg)){
+                                foreach ($last_msg as $item){
+                                    $friend = Db::table('df_member')
+                                        ->where('id',$item['send_mid'])
+                                        ->where('status',1)
+                                        ->field('id,username,nickname,avatar')
                                         ->find();
-
-                                    $one['userId'] = $friend['id'];
+                                    $one['userId'] = $item['send_mid'];
                                     $one['name'] = !empty($friend['nickname']) ? $friend['nickname'] : $friend['username'];//可根据type字段来自定义
                                     $one['images'] = $friend['avatar'];
                                     $one['firstChar'] = getFirstChar($one['name']);
                                     $one['listType'] = 1;
-                                    $one['updateTime'] = '' ;
-                                    $one['msg'] = '';
+                                    $one['updateTime'] = uc_time_ago($item['update_time']);
+                                    $one['msg'] = $item['content'];
+                                    $one['num'] = $item['num'];
                                     $one['status'] = 1;
-                                    $one['dataId'] = '';
-                                    if(!empty($last_msg)){
-                                        $one['updateTime'] = uc_time_ago($last_msg['update_time']) ;
-                                        $one['status'] = $last_msg['status'];
-                                        $one['msg'] = $last_msg['content'];
-                                        $one['type'] = $last_msg['type'];
-                                        $one['dataId'] = $last_msg['id'];
-                                    }
+                                    $one['type'] = $item['type'];
+                                    $one['dataId'] = $item['id'];
                                     array_push($list,$one);
-
                                 }
-
                             }
 
-                            //群组
-                            $group_ids = Db::table('df_member')
-                                ->where('id',$send_mid)
-                                ->value('groups');
-                            if(!empty($group_ids)){
-                                $group_ids = explode(',',$group_ids);
-                                $groups = Db::table('df_group')
-                                    ->where('id','in',$group_ids)
-                                    ->where('status',1)
-                                    ->field('id,name,status,icon,created_mid')
-                                    ->limit(50)
-                                    ->select();
-                                if(!empty($groups)){
-                                    //查找群里最近一条消息
-                                    foreach ($groups as $group){
-                                        $last_group_msg = Db::table('df_message_group')
-                                            ->where('group_id',$group['id'])
-                                            ->field('id,content,type,status,send_time,read_time,receive_time')
-                                            ->order('id','desc')
-                                            ->find();
-                                        $one['userId'] = $group['created_mid'];
-                                        $one['groupId'] = $group['id'];
-                                        $one['name'] = $group['name'];
-                                        $one['firstChar'] = '';
-                                        $one['images'] = $group['icon'];
-                                        $one['listType'] = 2;
-                                        $one['updateTime'] = '' ;
-                                        $one['msg'] = '';
-                                        $one['status'] = $group['status'];
-                                        $one['dataId'] = '';
-                                        if(!empty($last_group_msg)){
-                                            $one['updateTime'] = uc_time_ago($last_group_msg['update_time']) ;
-                                            $one['msg'] = $last_group_msg['content'];
-                                            $one['type'] = $last_group_msg['type'];
-                                            $one['status'] = $last_group_msg['status'];
-                                            $one['dataId'] = $last_group_msg['id'];
-                                        }
-                                        array_push($list,$one);
-                                    }
 
+                            //群组(未读的)
+                            $map1_group= [
+                                ['status','=',1],
+                                ['to_mid','=',$send_mid]
+                            ];
+                            $field_group = 'id,group_id,type,send_mid,content,status,update_time,send_time,read_time,receive_time';
+                            $subQuery_group = Db::table('df_message_group')
+                                ->where($map1_group)
+                                ->field($field_group)
+                                ->order('update_time','desc')
+                                ->buildSql();
+                            $last_group_msg = Db::table($subQuery_group.' g')
+                                ->field($field_group.',count(g.status) as num')
+                                ->group('group_id')
+                                ->limit(50)
+                                ->select();
+                            if(!empty($last_group_msg)){
+                                foreach ($last_group_msg as $item){
+                                    //查群信息
+                                    $group = Db::table('df_group')
+                                        ->where('group_id',$item['group_id'])
+                                        ->where('status',1)
+                                        ->field('id,name,status,icon,created_mid')
+                                        ->find();
+
+                                    $one['userId'] = $item['created_mid'];
+                                    $one['groupId'] = $group['id'];
+                                    $one['name'] = $group['name'];
+                                    $one['firstChar'] = '☆';
+                                    $one['images'] = $group['icon'];
+                                    $one['listType'] = 2;
+                                    $one['num'] = $item['num'];
+                                    $one['updateTime'] = uc_time_ago($item['update_time']);
+                                    $one['msg'] = $item['content'];
+                                    $one['status'] = $item['status'];
+                                    $one['type'] = $item['type'];
+                                    $one['dataId'] = $item['id'];
+                                    array_push($list,$one);
                                 }
                             }
 
@@ -235,6 +227,7 @@ class Swoole extends Server
                                                 'updateTime'=> '刚刚',
                                                 'listType'=>3,
                                                 'type'=>1,
+                                                'num'=>1,
                                                 'status'=>0,
                                                 'msg'=>$content,
                                             ]
@@ -270,6 +263,7 @@ class Swoole extends Server
                                 }else{
                                     Db::table('df_member')->where('id',$send_mid)->setField('groups',$group_id);
                                 }
+                                $fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
                                 Db::commit();
                                 $res = [
                                     'type' => 'addedGroup',
@@ -277,16 +271,22 @@ class Swoole extends Server
                                         'dataId'=>$group_id,
                                         'userId'=>$send_mid,
                                         'name'=> $data['name'],
+                                        'firstChar'=>'☆',
                                         'images'=>'/static/image/group.png',
                                         'updateTime'=> '刚刚',
                                         'listType'=>2,
                                         'type'=>1,
+                                        'num'=>1,
                                         'status'=>0,
                                         'msg'=>'创建成功',
                                     ]
                                 ];
                                 $res = json_encode($res,JSON_UNESCAPED_UNICODE);
-                                $server->push($frame->fd,$res);
+                                foreach ($fds as $fd){
+                                    if($server->isEstablished($fd)){
+                                        $server->push($fd,$res);
+                                    }
+                                }
                             }catch (\Exception $exception){
                                 Db::rollback();
                             }
@@ -351,12 +351,13 @@ class Swoole extends Server
                                         'updateTime'=> '刚刚',
                                         'listType'=>1,
                                         'type'=>1,
+                                        'num'=>1,
                                         'status'=>0,
                                         'msg'=>$f2_nickname.'成为您好友',
                                     ]
                                 ],JSON_UNESCAPED_UNICODE);
                                 $res2 = json_encode([
-                                    'type' => 'addedFriend',
+                                    'type' => 'applyAddedFriend',
                                     'data' => [
                                         'dataId'=>$I1,
                                         'userId'=>$send_mid,
@@ -367,6 +368,7 @@ class Swoole extends Server
                                         'updateTime'=> '刚刚',
                                         'listType'=>1,
                                         'type'=>1,
+                                        'num'=>1,
                                         'status'=>0,
                                         'msg'=>$f1_nickname.'成为您的好友',
                                     ]
@@ -413,20 +415,19 @@ class Swoole extends Server
                             $to_mid = $data['user_id'];
                             $from_mid = $data['to_user_id'];
                             $lastId = $data['lastId'];//起始ID
-                            $map1= [
-                                ['id','>',$lastId],
-                                ['send_mid','=',$to_mid],
-                                ['to_mid','=',$from_mid]
-                            ];
-                            $map2= [
-                                ['id','>',$lastId],
-                                ['send_mid','=',$from_mid],
-                                ['to_mid','=',$to_mid]
-                            ];
+                            $map1 = [];
+                            $map2 = [];
+                            if($lastId>0){
+                                $map1[] = ['id','<',$lastId];
+                                $map2[] = ['id','<',$lastId];
+                            }
+                            $map1[] = ['send_mid','=',$to_mid];
+                            $map1[] = ['to_mid','=',$from_mid];
+                            $map2[] = ['send_mid','=',$from_mid];
+                            $map2[] = ['to_mid','=',$to_mid];
 
                             $limit = (isset($data['limit']) && $data['limit']<=15) ? $data['limit'] : 15 ;
                             $msg_list = Db::table('df_message')
-//                                ->where('id','>',$lastId)
                                 ->whereOr([$map1,$map2])
                                 ->limit($limit)
                                 ->order('create_time','desc')
@@ -518,16 +519,94 @@ class Swoole extends Server
                                     'type'=>'receiveMassage',
                                     'data'=>$message
                                 ],JSON_UNESCAPED_UNICODE);
+                                $sendUserInfo = Db::table('df_member')
+                                    ->where('id',$message['send_mid'])
+                                    ->where('status',1)
+                                    ->field('id,username,nickname,avatar')
+                                    ->find();
+                                $one['userId'] = $sendUserInfo['id'];
+                                $one['name'] = !empty($sendUserInfo['nickname']) ? $sendUserInfo['nickname'] : $sendUserInfo['username'];;
+                                $one['firstChar'] = '';
+                                $one['images'] = $sendUserInfo['avatar'];
+                                $one['listType'] = 1;
+                                $one['num'] = 1;
+                                $one['updateTime'] = '刚刚';
+                                $one['msg'] = $message['content'];
+                                $one['status'] = 1;
+                                $one['type'] = $message['type'];
+                                $one['dataId'] = $message_id;
+                                $push_to = json_encode([
+                                    'type'=>'pushMessage',
+                                    'data'=>$one
+                                ],JSON_UNESCAPED_UNICODE);
                                 //redis 读取优化
                                 $fds = Db::table('df_socket_client')->where('user_id',$to_mid)->column('fd');
                                 foreach ($fds as $fd){
                                     if($server->isEstablished($fd)){
                                         $server->push($fd,$res_to);
+                                        $server->push($fd,$push_to);
                                     }
                                 }
                             }
                             break;
+                        case 'getAddressBook':
+                            $list = [];
+                            //好友
+                            $friend_ids = Db::table('df_friends')
+                                ->where('mid',$send_mid)
+                                ->where('status',1)
+                                ->column('friend_mid');
+                            if(!empty($friend_ids)) {
+                                $friends = Db::table('df_member')
+                                    ->where('id', 'in', $friend_ids)
+                                    ->where('status', 1)
+                                    ->field('id,username,nickname,avatar')
+                                    ->limit(500)
+                                    ->select();
+                                foreach ($friends as $friend){
+                                    $one['userId'] = $friend['id'];
+                                    $one['name'] = !empty($friend['nickname']) ? $friend['nickname'] : $friend['username'];
+                                    $one['firstChar'] = getFirstChar($one['name']);
+                                    $one['images'] = $friend['avatar'];
+                                    array_push($list,$one);
+                                }
 
+                            }
+                            //群
+                            $group_ids = Db::table('df_member')->where('id',$send_mid)->value('groups');
+                            if(!empty($group_ids)){
+                                $group_ids = explode(',',$group_ids);
+                                $groups = Db::table('df_group')
+                                    ->where('id','in',$group_ids)
+                                    ->where('status',1)
+                                    ->field('id,name,status,icon,created_mid')
+                                    ->limit(50)
+                                    ->select();
+                                if(!empty($groups)){
+                                    //查找群里最近一条消息
+                                    foreach ($groups as $group){
+                                        $one['userId'] = $group['created_mid'];
+                                        $one['groupId'] = $group['id'];
+                                        $one['name'] = $group['name'];
+                                        $one['firstChar'] = '☆';
+                                        $one['images'] = $group['icon'];
+                                        array_push($list,$one);
+                                    }
+
+                                }
+                            }
+                            $res = [
+                                'type'=>'getAddressBook',
+                                'data'=>$list
+                            ];
+                            $res = json_encode($res,JSON_UNESCAPED_UNICODE);
+                            $fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
+                            foreach ($fds as $fd){
+                                if($server->isEstablished($fd)){
+                                    $server->push($fd,$res);
+                                }
+                            }
+                            break;
                     }
                 }
             }
