@@ -247,11 +247,36 @@ class Swoole extends Server
                         case 'createGroup':
                             Db::startTrans();
                             try {
+                                $fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
+                                //检查是否存在一样的
+                                $isGid = Db::table('df_group')->where('name',$data['name'])->value('id');
+                                if($isGid>0){
+                                    $checked = [
+                                        'type' => 'checkGroup',
+                                        'data' => [
+                                            'code' => -1,
+                                            'error' => '群昵称已经存在'
+                                        ]
+                                    ];
+                                }else{
+                                    $checked = [
+                                        'type' => 'checkGroup',
+                                        'data' => [
+                                            'code' => 0,
+                                            'info' => 'success'
+                                        ]
+                                    ];
+                                }
+                                $checked = json_encode($checked,JSON_UNESCAPED_UNICODE);
+                                $server->push($frame->fd,$checked);
+                                //===============================================
                                 $group_id = Db::table('df_group')->insert([
                                     'created_mid' => $send_mid,
                                     'name' => $data['name'],
                                     'status' => 1,
                                     'description' => $data['description'],
+                                    'manage' => $send_mid,
+                                    'members' => $send_mid,
                                     'create_time' => $nowTime,
                                     'update_time' => $nowTime,
                                 ],false,true,'id');
@@ -263,12 +288,13 @@ class Swoole extends Server
                                 }else{
                                     Db::table('df_member')->where('id',$send_mid)->setField('groups',$group_id);
                                 }
-                                $fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
+
                                 Db::commit();
                                 $res = [
                                     'type' => 'addedGroup',
                                     'data' => [
                                         'dataId'=>$group_id,
+                                        'groupId'=>$group_id,
                                         'userId'=>$send_mid,
                                         'name'=> $data['name'],
                                         'firstChar'=>'☆',
@@ -309,6 +335,55 @@ class Swoole extends Server
                                 $server->push($frame->fd,$friend);
                             }
 
+                            break;
+                        //获取群信息
+                        case 'getGroupInfo':
+                            $gid = $data['group_id'];
+                            $groupInfo = Db::table('df_group')->where('id',$gid)->where('status',1)->find();
+                            $groupInfo['createTime'] = uc_time_ago($groupInfo['create_time']);
+                            $manageIds = explode(',',$groupInfo['manage']);
+                            $memberIds = explode(',',$groupInfo['members']);
+                            //
+                            $manageList = Db::table('df_member')
+                                ->where('id','in',$manageIds)
+                                ->where('status',1)
+                                ->field('id,username,nickname,avatar')->select();
+                            $memberList = Db::table('df_member')
+                                ->where('id','in',$memberIds)
+                                ->where('status',1)
+                                ->field('id,username,nickname,avatar')->select();
+                            foreach ($manageList as $k=>$v){
+                                $name = !empty($v['nickname']) ? $v['nickname'] : $v['username'];
+                                $manageList[$k]['firstChar'] = getFirstChar($name);
+                                $manageList[$k]['name'] = $name;
+                                $manageList[$k]['userId'] = $v['id'];
+                            }
+                            foreach ($memberList as $k=>$v){
+                                $name = !empty($v['nickname']) ? $v['nickname'] : $v['username'];
+                                $memberList[$k]['firstChar'] = getFirstChar($name);
+                                $memberList[$k]['name'] = $name;
+                                $memberList[$k]['userId'] = $v['id'];
+                            }
+                            unset($groupInfo['manage']);
+                            unset($groupInfo['members']);
+                            $list = [
+                                'type' => 'getGroupInfo',
+                                'data' => [
+                                    'groupInfo' => $groupInfo,
+                                    'manageList' => $manageList,
+                                    'memberList' => $memberList,
+                                ]
+                            ];
+                            $res = json_encode($list,JSON_UNESCAPED_UNICODE);
+                            $server->push($frame->fd,$res);
+                            break;
+                        //添加群成员
+                        case 'addGroupMember':
+                            $gid = $data['group_id'];
+
+                            break;
+                        //删除群成员
+                        case 'delGroupMember':
                             break;
                         //处理申请
                         case 'handleApply':
@@ -568,6 +643,13 @@ class Swoole extends Server
                                     $one['name'] = !empty($friend['nickname']) ? $friend['nickname'] : $friend['username'];
                                     $one['firstChar'] = getFirstChar($one['name']);
                                     $one['images'] = $friend['avatar'];
+                                    $one['listType'] = 1;
+                                    $one['num'] = 0;
+                                    $one['updateTime'] = '刚刚';
+                                    $one['msg'] = '';
+                                    $one['status'] = 1;
+                                    $one['type'] = 1;
+                                    $one['dataId'] = $one['userId'];
                                     array_push($list,$one);
                                 }
 
@@ -590,6 +672,13 @@ class Swoole extends Server
                                         $one['name'] = $group['name'];
                                         $one['firstChar'] = '☆';
                                         $one['images'] = $group['icon'];
+                                        $one['listType'] = 2;
+                                        $one['num'] = 0;
+                                        $one['updateTime'] = '刚刚';
+                                        $one['msg'] = '';
+                                        $one['status'] = 1;
+                                        $one['type'] = 1;
+                                        $one['dataId'] = $one['userId'];
                                         array_push($list,$one);
                                     }
 
