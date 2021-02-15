@@ -380,10 +380,107 @@ class Swoole extends Server
                         //添加群成员
                         case 'addGroupMember':
                             $gid = $data['group_id'];
-
+                            $userIds = json_decode($data['user_ids'],true);
+                            $newIds = [];
+                            $one = Db::table('df_group')
+                                ->where('id',$gid)
+                                ->where('status',1)
+                                ->find();
+                            $members = $one['members'];
+                            if(!empty($members)){
+                                $members_arr = explode(',',$members);
+                                $addUsers = $members_arr;
+                                foreach ($userIds as $id){
+                                    if(!in_array($id,$members_arr)){ //没有加入到群里的情况
+                                        $addUsers[] = $id;
+                                        $newIds[] = $id;
+                                    }
+                                }
+                            }else{
+                                $addUsers = $userIds;
+                                $newIds = $userIds;
+                            }
+                            //统一序列化,重置成员
+                            $addUsers = implode(',',$addUsers);
+                            $members = Db::table('df_group')->where('id',$gid)->setField('members',$addUsers);
+                            if($members){
+                                $fds = Db::table('df_socket_client')->where('user_id','in',$newIds)->column('fd');
+                                $me_res = json_encode([
+                                    'type' => 'addGroupMember',
+                                    'data' => [
+                                        'code' => 0,
+                                        'info' => '添加成功'
+                                    ]
+                                ],JSON_UNESCAPED_UNICODE);
+                                $server->push($frame->fd,$me_res);
+                                //
+                                $res = json_encode([
+                                    'type' => 'addedGroup',
+                                    'data' => [
+                                        'dataId'=>$gid,
+                                        'groupId'=>$gid,
+                                        'userId'=>$one['created_mid'],
+                                        'name'=> $one['name'],
+                                        'firstChar'=>'☆',
+                                        'images'=>$one['icon'],
+                                        'updateTime'=> '刚刚',
+                                        'listType'=>2,
+                                        'type'=>1,
+                                        'num'=>1,
+                                        'status'=>0,
+                                        'msg'=>'你加入了该群',
+                                    ]
+                                ],JSON_UNESCAPED_UNICODE);
+                                foreach ($fds as $fd){
+                                    if($server->isEstablished($fd)){
+                                        $server->push($fd,$res);
+                                    }
+                                }
+                                //群里所有人发送加入群的消息
+                            }
                             break;
                         //删除群成员
                         case 'delGroupMember':
+                            $gid = $data['group_id'];
+                            $userIds = json_decode($data['user_ids'],true);
+                            $one = Db::table('df_group')
+                                ->where('id',$gid)
+                                ->where('status',1)
+                                ->find();
+                            $members = $one['members'];
+                            $manage = $one['manage'];
+                            $manage_arr = explode(',',$manage);
+                            $members_arr = explode(',',$members);
+                            if(!in_array($send_mid,$manage_arr)){
+                                $data = [
+                                    'code' => -1,
+                                    'error' => '权限不足'
+                                ];
+                            }else{
+                                if(in_array($send_mid,$userIds)){
+                                    $data = [
+                                        'code' => -1,
+                                        'error' => '不能删除自己'
+                                    ];
+                                }else{
+                                    $newMember = array_diff($members_arr, $userIds);
+                                    $newMember = implode(',',$newMember);
+                                    $r = Db::table('df_group')->where('id',$gid)->setField('members',$newMember);
+                                    if($r){
+                                        $data = [
+                                            'code' => 0,
+                                            'info' => '成功移出群'
+                                        ];
+                                    }
+                                }
+
+                            }
+                            $me_res = json_encode([
+                                'type' => 'delGroupMember',
+                                'data' => $data
+                            ],JSON_UNESCAPED_UNICODE);
+                            $server->push($frame->fd,$me_res);
+
                             break;
                         //处理申请
                         case 'handleApply':
