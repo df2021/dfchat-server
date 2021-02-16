@@ -343,6 +343,9 @@ class Swoole extends Server
                             $groupInfo['createTime'] = uc_time_ago($groupInfo['create_time']);
                             $manageIds = explode(',',$groupInfo['manage']);
                             $memberIds = explode(',',$groupInfo['members']);
+                            if(!in_array($send_mid,$memberIds)){
+                                return null;
+                            }
                             //
                             $manageList = Db::table('df_member')
                                 ->where('id','in',$manageIds)
@@ -352,18 +355,32 @@ class Swoole extends Server
                                 ->where('id','in',$memberIds)
                                 ->where('status',1)
                                 ->field('id,username,nickname,avatar')->select();
+                            $first_manage = [];
                             foreach ($manageList as $k=>$v){
                                 $name = !empty($v['nickname']) ? $v['nickname'] : $v['username'];
                                 $manageList[$k]['firstChar'] = getFirstChar($name);
                                 $manageList[$k]['name'] = $name;
                                 $manageList[$k]['userId'] = $v['id'];
+                                if($v['id']==$groupInfo['created_mid']){
+                                    $first_manage = $manageList[$k];
+                                    unset($manageList[$k]);
+                                }
                             }
+                            array_unshift($manageList,$first_manage);
+
+                            $first_member = [];
                             foreach ($memberList as $k=>$v){
                                 $name = !empty($v['nickname']) ? $v['nickname'] : $v['username'];
                                 $memberList[$k]['firstChar'] = getFirstChar($name);
                                 $memberList[$k]['name'] = $name;
                                 $memberList[$k]['userId'] = $v['id'];
+                                if($v['id']==$groupInfo['created_mid']){
+                                    $first_member = $memberList[$k];
+                                    unset($memberList[$k]);
+                                }
                             }
+                            array_unshift($memberList,$first_member);
+
                             unset($groupInfo['manage']);
                             unset($groupInfo['members']);
                             $list = [
@@ -387,8 +404,13 @@ class Swoole extends Server
                                 ->where('status',1)
                                 ->find();
                             $members = $one['members'];
+                            $members_arr = explode(',',$members);
+                            //权限检查
+                            if(!in_array($send_mid,$members_arr)){
+                                return null;
+                            }
+                            //
                             if(!empty($members)){
-                                $members_arr = explode(',',$members);
                                 $addUsers = $members_arr;
                                 foreach ($userIds as $id){
                                     if(!in_array($id,$members_arr)){ //没有加入到群里的情况
@@ -403,7 +425,23 @@ class Swoole extends Server
                             //统一序列化,重置成员
                             $addUsers = implode(',',$addUsers);
                             $members = Db::table('df_group')->where('id',$gid)->setField('members',$addUsers);
+                            //重置成员个人信息
+                            foreach ($newIds as $id){
+                                $groups = Db::table('df_member')->where('id',$id)->value('groups');
+                                $groups_arr = explode(',',$groups);
+                                if(!in_array($gid,$groups_arr)){
+                                    if(!empty($groups)){
+                                        $groups_arr[] = $gid;
+                                        $newGroups = implode(',',$groups_arr);
+                                    }else{
+                                        $newGroups = $gid;
+                                    }
+
+                                    Db::table('df_member')->where('id',$id)->setField('groups',$newGroups);
+                                }
+                            }
                             if($members){
+                                //返回响应结果
                                 $fds = Db::table('df_socket_client')->where('user_id','in',$newIds)->column('fd');
                                 $me_res = json_encode([
                                     'type' => 'addGroupMember',
@@ -413,7 +451,7 @@ class Swoole extends Server
                                     ]
                                 ],JSON_UNESCAPED_UNICODE);
                                 $server->push($frame->fd,$me_res);
-                                //
+                                //向新加入成员推送通知消息
                                 $res = json_encode([
                                     'type' => 'addedGroup',
                                     'data' => [
@@ -436,7 +474,53 @@ class Swoole extends Server
                                         $server->push($fd,$res);
                                     }
                                 }
-                                //群里所有人发送加入群的消息
+                                //向已经加入的聊天列表推送提示 todo
+                                //在群聊窗口向群里所有人推送加入群的消息
+                                $allMember = Db::table('df_group')
+                                    ->where('id',$gid)
+                                    ->where('status',1)
+                                    ->value('members');
+                                $allMember = explode(',',$allMember);
+                                $sendMessage = [];
+
+                                foreach ($newIds as $item){
+                                    $info = Db::table('df_member')
+                                        ->field('id,username,nickname')
+                                        ->where('id',$item)
+                                        ->find();
+                                    $name = !empty($info['nickname']) ? $info['nickname'] : $info['username'];
+                                    $content = json_encode([
+                                        'text' => $name.'加入',
+                                        'type' => 'word'
+                                    ],JSON_UNESCAPED_UNICODE);
+                                    $message = [
+                                        'type' => 1,
+                                        'status' => 1,
+                                        'content' => $content,
+                                        'create_time' => $nowTime,
+                                        'update_time' => $nowTime,
+                                        'send_time' => $nowTime,
+                                        'group_id' => $gid,
+                                    ]; //保存消息到数据库
+                                    $id = Db::table('df_message_group')->insert($message,false,true,'id');
+                                    $sendMessage[] = [
+                                        'type' => 1,
+                                        'content' => $content,
+                                        'id' => $id,
+                                    ];
+                                }
+
+                                $res = json_encode([
+                                    'type' => 'getSystemMessage',
+                                    'data' => $sendMessage
+                                ],JSON_UNESCAPED_UNICODE);
+                                $groupFds = Db::table('df_socket_client')->where('user_id','in',$allMember)->column('fd');
+                                foreach ($groupFds as $fd){
+                                    if($server->isEstablished($fd)){
+                                        $server->push($fd,$res);
+                                    }
+                                }
+
                             }
                             break;
                         //删除群成员
@@ -466,11 +550,53 @@ class Swoole extends Server
                                     $newMember = array_diff($members_arr, $userIds);
                                     $newMember = implode(',',$newMember);
                                     $r = Db::table('df_group')->where('id',$gid)->setField('members',$newMember);
+                                    //重置成员个人信息
+                                    foreach ($userIds as $id){
+                                        $groups = Db::table('df_member')->where('id',$id)->value('groups');
+                                        $groups_arr = explode(',',$groups);
+                                        if(in_array($gid,$groups_arr)){
+                                            $groups_arr[] = $gid;
+                                            $newGroups = array_diff($groups_arr,[$gid]);
+                                            $newGroups = implode(',',$newGroups);
+                                            Db::table('df_member')->where('id',$id)->setField('groups',$newGroups);
+                                        }
+                                    }
                                     if($r){
                                         $data = [
                                             'code' => 0,
                                             'info' => '成功移出群'
                                         ];
+                                        //移出群系统消息保存到数据库,并发送
+                                        $sendMessage = [];
+                                        foreach ($userIds as $uid){
+                                            $info = Db::table('df_member')->field('id,username,nickname')->where('id',$uid)->find();
+                                            $name = !empty($info['nickname']) ? $info['nickname'] : $info['username'];
+                                            $content = json_encode([
+                                                'text' => $name.'被移出',
+                                                'type' => 'word'
+                                            ],JSON_UNESCAPED_UNICODE);
+                                            $message = [
+                                                'type' => 1,
+                                                'status' => 1,
+                                                'content' => $content,
+                                                'create_time' => $nowTime,
+                                                'update_time' => $nowTime,
+                                                'send_time' => $nowTime,
+                                                'group_id' => $gid,
+                                            ]; //保存消息到数据库
+                                            $id = Db::table('df_message_group')->insert($message,false,true,'id');
+                                            $sendMessage[] = [
+                                                'type' => 1,
+                                                'content' => $content,
+                                                'id' => $id,
+                                            ];
+
+                                        }
+                                        $res = json_encode([
+                                            'type' => 'getSystemMessage',
+                                            'data' => $sendMessage
+                                        ],JSON_UNESCAPED_UNICODE);
+                                        $server->push($frame->fd,$res);
                                     }
                                 }
 
@@ -602,7 +728,7 @@ class Swoole extends Server
                             $msg_list = Db::table('df_message')
                                 ->whereOr([$map1,$map2])
                                 ->limit($limit)
-                                ->order('create_time','desc')
+                                ->order('id','desc')
                                 ->select();
                             if(!empty($msg_list)){
                                 foreach ($msg_list as $k=>$v)
@@ -612,6 +738,53 @@ class Swoole extends Server
                                 //优化-如果涉及图片等可尝试使用base_64进行编码
                                 $res = [
                                     'type' => 'getMessage',
+                                    'data' => $msg_list
+                                ];
+                                $res = json_encode($res,JSON_UNESCAPED_UNICODE);
+                                $me_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
+                                // 需要先判断是否是正确的websocket连接，否则有可能会push失败
+                                foreach ($me_fds as $fd){
+                                    if($server->isEstablished($fd)){
+                                        $server->push($fd,$res);
+                                    }
+                                }
+                            }
+                            break;//聊天窗口获取消息
+                        //群聊天窗口获取消息
+                        case 'getGroupMessage':
+                            if(!isset($data['group_id'])){
+                                return '未获取到参数group_id';
+                            }
+                            $group_id = $data['group_id'];
+
+                            $lastId = $data['lastId'];//起始ID
+                            $where = [
+                                ['group_id','=',$group_id],
+                            ];
+                            if($lastId>0){
+                                $where[] = ['id','<',$lastId];
+                            }
+                            $limit = (isset($data['limit']) && $data['limit']<=15) ? $data['limit'] : 15 ;
+                            $msg_list = Db::table('df_message_group')
+                                ->where($where)
+                                ->limit($limit)
+                                ->order('id','desc')
+                                ->select();
+                            if(!empty($msg_list)){
+                                foreach ($msg_list as $k=>$v)
+                                {
+                                    $msg_list[$k]['create_time'] = date('i:s',$v['create_time']);
+                                    if($v['send_mid']>0){
+                                        $info = Db::table('df_member')
+                                            ->where('id',$v['send_mid'])
+                                            ->field('id,username,nickname,avatar')
+                                            ->find();
+                                        $msg_list[$k]['name'] = !empty($info['nickname']) ? $info['nickname'] : $info['username'];
+                                        $msg_list[$k]['avatar'] = $info['avatar'];
+                                    }
+                                }
+                                $res = [
+                                    'type' => 'getGroupMessage',
                                     'data' => $msg_list
                                 ];
                                 $res = json_encode($res,JSON_UNESCAPED_UNICODE);
@@ -659,6 +832,9 @@ class Swoole extends Server
                             $content = $data['content'];
                             $send_mid = $data['user_id'];
                             $to_mid = $data['to_user_id'];
+                            if($send_mid==$to_mid){
+                                return null;
+                            }
                             //保存消息到数据库
                             $message = [
                                 'send_mid' => $send_mid,
@@ -721,6 +897,78 @@ class Swoole extends Server
                                 }
                             }
                             break;
+                        case 'sendGroupMsg':
+                            if(!isset($data['group_id'])){
+                                return '未获取到参数group_id';
+                            }
+                            $content = $data['content'];
+                            //$send_mid = $data['user_id'];
+                            $group_id = $data['group_id'];
+
+                            //是否是群内成员，不是则禁止发消息
+                            $groupFind = Db::table('df_group')->where('id',$group_id)->field('id,members,name')->find();
+                            $members = $groupFind['members'];
+                            $members = explode(',',$members);
+                            if(!in_array($send_mid,$members)){
+                                return null;
+                            }
+                            //保存消息到数据库
+                            $message = [
+                                'group_id' => $group_id,
+                                'send_mid' => $send_mid,
+                                'type' => $data['type'],
+                                'status' => 1,
+                                'content' => $content,
+                                'create_time' => $nowTime,
+                                'update_time' => $nowTime,
+                                'send_time' => $nowTime,
+                            ];
+                            $message_id = Db::table('df_message_group')->insert($message,false,true,'id');
+                            if($message_id>0){
+                                $info = Db::table('df_member')->where('id',$send_mid)->field('id,username,nickname,avatar')->find();
+                                $message['id'] = $message_id;
+                                $message['update_time'] = '刚刚';
+                                $message['avatar'] = $info['avatar'];
+                                $message['name'] = !empty($info['nickname']) ? $info['nickname'] : $info['username'];
+                                //消息保存成功下发给所有人
+                                $res_me = json_encode([
+                                    'type'=>'receiveGroupMassage',
+                                    'data'=>$message
+                                ],JSON_UNESCAPED_UNICODE);
+
+                                $groupFind = Db::table('df_group')->where('id',$group_id)->field('id,members,name')->find();
+                                $members = $groupFind['members'];
+                                $members = explode(',',$members);
+                                $me_fds = Db::table('df_socket_client')->where('user_id','in',$members)->column('fd');
+
+                                //推送至列表
+                                $one = [
+                                    'dataId'=>$group_id,
+                                    'groupId'=>$group_id,
+                                    'userId'=>$send_mid,
+                                    'name'=> $groupFind['name'],
+                                    'firstChar'=>'☆',
+                                    'images'=>'/static/image/group.png',
+                                    'updateTime'=> '刚刚',
+                                    'listType'=>2,
+                                    'type'=>1,
+                                    'num'=>1,
+                                    'status'=>0,
+                                    'msg'=>$content,
+                                ];
+                                $push_to = json_encode([
+                                    'type'=>'pushMessage',
+                                    'data'=>$one
+                                ],JSON_UNESCAPED_UNICODE);
+
+                                foreach ($me_fds as $fd){
+                                    if($server->isEstablished($fd)){
+                                        $server->push($fd,$res_me);
+                                        $server->push($fd,$push_to);
+                                    }
+                                }
+                            }
+                            break;
                         case 'getAddressBook':
                             $list = [];
                             //好友
@@ -762,7 +1010,6 @@ class Swoole extends Server
                                     ->limit(50)
                                     ->select();
                                 if(!empty($groups)){
-                                    //查找群里最近一条消息
                                     foreach ($groups as $group){
                                         $one['userId'] = $group['created_mid'];
                                         $one['groupId'] = $group['id'];
@@ -792,6 +1039,54 @@ class Swoole extends Server
                                     $server->push($fd,$res);
                                 }
                             }
+                            break;
+                        //删除或退出群
+                        case 'outGroup':
+                            if(!isset($data['group_id'])){
+                                return null;
+                            }
+                            $group_id = $data['group_id'];
+                            $find = Db::table('df_group')->where('id',$group_id)->find();
+                            $members = $find['members'];
+                            $members_arr = explode(',',$members);
+                            //如果是群主
+                            if($send_mid==$find['created_mid']){
+                                //删除该群所有消息
+                                Db::table('df_message_group')
+                                    ->where('group_id',$group_id)
+                                    ->delete(true);
+                                //删除群
+                                Db::table('df_group')->where('id',$group_id)->delete(true);
+                                //重置所有个人信息
+                                foreach ($members_arr as $mid){
+                                    $groups = Db::table('df_member')->where('id',$mid)->value('groups');
+                                    $groups_arr = explode(',',$groups);
+                                    $newGroups_arr = array_diff($groups_arr,[$group_id]);
+                                    $newGroups = implode(',',$newGroups_arr);
+                                    Db::table('df_member')->where('id',$mid)->setField('groups',$newGroups);
+                                }
+                            }else{
+                                //重置群信息
+                                $newMember_arr = array_diff($members_arr,[$send_mid]);
+                                $newMember = implode(',',$newMember_arr);
+                                Db::table('df_group')->where('id',$group_id)->setField('members',$newMember);
+                            }
+                            //重置个人信息
+                            $groups = Db::table('df_member')->where('id',$send_mid)->value('groups');
+                            $groups_arr = explode(',',$groups);
+                            $newGroups_arr = array_diff($groups_arr,[$group_id]);
+                            $newGroups = implode(',',$newGroups_arr);
+                            Db::table('df_member')->where('id',$send_mid)->setField('groups',$newGroups);
+                            //推送
+                            $res = [
+                                'type'=> 'outGroup',
+                                'data'=>[
+                                    'code'=>0,
+                                    'info'=>'success'
+                                ]
+                            ];
+                            $res = json_encode($res);
+                            $server->push($frame->fd, $res);
                             break;
                     }
                 }
