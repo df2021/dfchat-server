@@ -193,10 +193,10 @@ class Swoole extends Server
                         case 'addFriend':
                             $to_mid = $data['to_mid'];
                             $content = $data['content'];
-
                             $apply_id = Db::table('df_apply')
                                 ->where('send_mid',$send_mid)
                                 ->where('to_mid',$to_mid)
+                                ->where('status',0)
                                 ->value('id');
                             if($apply_id>0){
                                 $server->push($frame->fd,'已发出过同样的申请');
@@ -331,10 +331,58 @@ class Swoole extends Server
                                     ->where('status',1)
                                     ->value('id');
                                 $friend['is_friend'] = $is_friend>0 ? 1 : 0;
-                                $friend = json_encode($friend,JSON_UNESCAPED_UNICODE);
-                                $server->push($frame->fd,$friend);
+                                //
+                                $friend['dataId'] = $friend['id'];
+                                $friend['userId'] = $friend['id'];
+                                $friend['name'] = !empty($friend['nickname']) ? $friend['nickname'] : $friend['username'];
+                                $friend['firstChar'] = getFirstChar($friend['name']);
+//                                $friend['signature'] = $friend['signature'];
+                                $friend['images'] = $friend['avatar'];
+                                $friend['updateTime'] = $friend['update_time'];
+                                $friend['listType'] = 1;
+                                $res = json_encode([
+                                    'type'=> 'getFriend',
+                                    'data'=> $friend
+                                ],JSON_UNESCAPED_UNICODE);
+
+//                                $friend = json_encode($friend,JSON_UNESCAPED_UNICODE);
+                                $server->push($frame->fd,$res);
                             }
 
+                            break;
+                        //删除好友
+                        case 'delFriend':
+                            if(!isset($data['friend_id'])){
+                                return null;
+                            }
+                            $fid = $data['friend_id'];
+                            if($fid==$send_mid){
+                                return null;
+                            }
+                            Db::table('df_friends')
+                                ->where('mid',$send_mid)
+                                ->where('friend_mid',$fid)
+                                ->delete(true);
+                            Db::table('df_friends')
+                                ->where('mid',$fid)
+                                ->where('friend_mid',$send_mid)
+                                ->delete(true);
+                            Db::table('df_message')
+                                ->where('send_mid',$fid)
+                                ->where('to_mid',$send_mid)
+                                ->delete(true);
+                            Db::table('df_message')
+                                ->where('send_mid',$send_mid)
+                                ->where('to_mid',$fid)
+                                ->delete(true);
+                            $res = json_encode([
+                                'type'=> 'delFriend',
+                                'data'=> [
+                                    'code' => 0,
+                                    'info' => 'success'
+                                ]
+                            ],JSON_UNESCAPED_UNICODE);
+                            $server->push($frame->fd, $res);
                             break;
                         //获取群信息
                         case 'getGroupInfo':
@@ -650,7 +698,7 @@ class Swoole extends Server
                                         'listType'=>1,
                                         'type'=>1,
                                         'num'=>1,
-                                        'status'=>0,
+                                        'status'=>1,
                                         'msg'=>$f2_nickname.'成为您好友',
                                     ]
                                 ],JSON_UNESCAPED_UNICODE);
@@ -667,7 +715,7 @@ class Swoole extends Server
                                         'listType'=>1,
                                         'type'=>1,
                                         'num'=>1,
-                                        'status'=>0,
+                                        'status'=>1,
                                         'msg'=>$f1_nickname.'成为您的好友',
                                     ]
                                 ],JSON_UNESCAPED_UNICODE);
@@ -832,6 +880,14 @@ class Swoole extends Server
                             $content = $data['content'];
                             $send_mid = $data['user_id'];
                             $to_mid = $data['to_user_id'];
+                            //如果不是好友也不能发
+                            $exs = Db::table('df_friends')
+                                ->where('mid',$send_mid)
+                                ->where('friend_mid',$to_mid)
+                                ->value('id');
+                            if(!$exs){
+                                return null;
+                            }
                             if($send_mid==$to_mid){
                                 return null;
                             }
