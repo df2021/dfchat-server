@@ -345,7 +345,6 @@ class Swoole extends Server
                                     'data'=> $friend
                                 ],JSON_UNESCAPED_UNICODE);
 
-//                                $friend = json_encode($friend,JSON_UNESCAPED_UNICODE);
                                 $server->push($frame->fd,$res);
                             }
 
@@ -778,10 +777,24 @@ class Swoole extends Server
                                 ->limit($limit)
                                 ->order('id','desc')
                                 ->select();
+
                             if(!empty($msg_list)){
+                                $readMsgIds = [];
                                 foreach ($msg_list as $k=>$v)
                                 {
+                                    $updateId = Db::table('df_message')
+                                        ->where('id',$v['id'])
+                                        ->value('id');
+                                    Db::table('df_message')
+                                        ->where('id',$updateId)
+                                        ->update([
+                                        'status' =>3,
+                                        'update_time' =>$nowTime,
+                                        'read_time' =>$nowTime,
+                                    ]);
+                                    $readMsgIds[] = $updateId;
                                     $msg_list[$k]['create_time'] = date('i:s',$v['create_time']);
+                                    $msg_list[$k]['status'] = 3;
                                 }
                                 //优化-如果涉及图片等可尝试使用base_64进行编码
                                 $res = [
@@ -794,6 +807,18 @@ class Swoole extends Server
                                 foreach ($me_fds as $fd){
                                     if($server->isEstablished($fd)){
                                         $server->push($fd,$res);
+                                    }
+                                }
+                                //
+                                $to_res = [
+                                    'type' => 'batchReadMsg',
+                                    'data' => $readMsgIds
+                                ];
+                                $to_res = json_encode($to_res);
+                                $to_fds = Db::table('df_socket_client')->where('user_id',$from_mid)->column('fd');
+                                foreach ($to_fds as $fd){
+                                    if($server->isEstablished($fd)){
+                                        $server->push($fd,$to_res);
                                     }
                                 }
                             }
@@ -875,7 +900,7 @@ class Swoole extends Server
                                 }
                             }
                             break;
-                        // 聊天窗口发送消息
+                        //聊天窗口发送消息
                         case 'sendMsg':
                             $content = $data['content'];
                             $send_mid = $data['user_id'];
@@ -905,7 +930,7 @@ class Swoole extends Server
                             $message_id = Db::table('df_message')->insert($message,false,true,'id');
                             if($message_id>0){
                                 $message['id'] = $message_id;
-                                $message['update_time'] = '刚刚';
+                                $message['update_time'] = date('i:s',$nowTime);
                                 //消息保存成功下发给双方
                                 $res_me = json_encode([
                                     'type'=>'receiveMassage',
@@ -930,7 +955,7 @@ class Swoole extends Server
                                     ->find();
                                 $one['userId'] = $sendUserInfo['id'];
                                 $one['name'] = !empty($sendUserInfo['nickname']) ? $sendUserInfo['nickname'] : $sendUserInfo['username'];;
-                                $one['firstChar'] = '';
+                                $one['firstChar'] = getFirstChar($one['name']);
                                 $one['images'] = $sendUserInfo['avatar'];
                                 $one['listType'] = 1;
                                 $one['num'] = 1;
@@ -952,6 +977,44 @@ class Swoole extends Server
                                     }
                                 }
                             }
+                            break;
+                        case 'readMsg':
+                            if(!isset($data['id']) || !isset($data['to_user_id']) || !isset($data['readEd']) ){
+                                return null;
+                            }
+                            $toMid = $data['to_user_id'];
+                            $id = $data['id'];
+                            $update = [
+                                'status' => 2,
+                                'update_time' => $nowTime,
+                                'receive_time' => $nowTime,
+                            ];
+                            if($data['readEd']==1 ){
+                                $update['read_time'] = $nowTime;
+                                $update['status'] = 3;
+                            }
+                            $r = Db::table('df_message')
+                                ->where('id',$id)
+                                ->where('send_mid',$toMid)
+                                ->where('to_mid',$send_mid)
+                                ->update($update);
+                            if($r){
+                                $res = [
+                                    'type' => 'readMsg',
+                                    'data' => [
+                                        'id' => $id,
+                                        'status' => $update['status']
+                                    ]
+                                ];
+                                $push_to = json_encode($res);
+                                $fds = Db::table('df_socket_client')->where('user_id','in',[$toMid,$send_mid])->column('fd');
+                                foreach ($fds as $fd){
+                                    if($server->isEstablished($fd)){
+                                        $server->push($fd,$push_to);
+                                    }
+                                }
+                            }
+
                             break;
                         case 'sendGroupMsg':
                             if(!isset($data['group_id'])){
@@ -1095,6 +1158,77 @@ class Swoole extends Server
                                     $server->push($fd,$res);
                                 }
                             }
+                            break;
+                        case 'setInfo':
+                            if(!isset($data['params'])){
+                                return null;
+                            }
+                            $formData = $data['params'];
+                            $update = [
+                                'nickname' => $formData['nickname'],
+                                'signature' => $formData['signature'],
+                                'avatar' => $formData['avatar'],
+                                'update_time' => $nowTime
+                            ];
+                            $r = Db::table('df_member')
+                                ->where('id',$send_mid)
+                                ->where('status',1)
+                                ->update($update);
+
+                            if($r){
+                                $res = [
+                                    'type' => 'setInfo',
+                                    'data' => [
+                                        'code' => 0,
+                                        'info' => 'success'
+                                    ]
+                                ];
+                            }else{
+                                $res = [
+                                    'type' => 'setInfo',
+                                    'data' => [
+                                        'code' => -1,
+                                        'error' => '设置失败'
+                                    ]
+                                ];
+                            }
+                            $res  = json_encode($res,JSON_UNESCAPED_UNICODE);
+                            $server->push($frame->fd,$res);
+                            break;
+                        case 'setGroupInfo':
+                            if(!isset($data['params'])){
+                                return null;
+                            }
+                            $formData = $data['params'];
+                            $update = [
+                                'name' => $formData['name'],
+                                'icon' => $formData['icon'],
+                                'description' => $formData['description'],
+                                'update_time' => $nowTime
+                            ];
+                            $r = Db::table('df_group')
+                                ->where('id',$formData['groupId'])
+                                ->where('created_mid',$send_mid)
+                                ->update($update);
+                            if($r){
+                                $res = [
+                                    'type' => 'setGroupInfo',
+                                    'data' => [
+                                        'code' => 0,
+                                        'info' => 'success'
+                                    ]
+                                ];
+                            }else{
+                                $res = [
+                                    'type' => 'setGroupInfo',
+                                    'data' => [
+                                        'code' => -1,
+                                        'error' => '设置失败'
+                                    ]
+                                ];
+                            }
+                            $res  = json_encode($res,JSON_UNESCAPED_UNICODE);
+                            $server->push($frame->fd,$res);
                             break;
                         //删除或退出群
                         case 'outGroup':
