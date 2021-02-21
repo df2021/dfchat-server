@@ -104,14 +104,14 @@ class Swoole extends Server
 
                             //好友(未读的)
                             $map1= [
-                                ['status','=',1],
+                                ['status','<',3],
                                 ['to_mid','=',$send_mid]
                             ];
                             $field_friend = 'id,type,send_mid,to_mid,content,status,update_time,send_time,read_time,receive_time';
                             $subQuery_friend = Db::table('df_message')
                                 ->field($field_friend)
                                 ->where($map1)
-                                ->order('update_time','desc')
+                                ->order('id','desc')
                                 ->buildSql();
                             $last_msg = Db::table($subQuery_friend.' f')
                                 ->field($field_friend.', count(f.status) as num')
@@ -143,14 +143,14 @@ class Swoole extends Server
 
                             //群组(未读的)
                             $map1_group= [
-                                ['status','=',1],
+                                ['status','<',3],
                                 ['to_mid','=',$send_mid]
                             ];
                             $field_group = 'id,group_id,type,send_mid,content,status,update_time,send_time,read_time,receive_time';
                             $subQuery_group = Db::table('df_message_group')
                                 ->where($map1_group)
                                 ->field($field_group)
-                                ->order('update_time','desc')
+                                ->order('id','desc')
                                 ->buildSql();
                             $last_group_msg = Db::table($subQuery_group.' g')
                                 ->field($field_group.',count(g.status) as num')
@@ -224,7 +224,7 @@ class Swoole extends Server
                                                 'userId'=>$send_mid,
                                                 'name'=> '验证消息',
                                                 'images'=>'/static/image/noteico.png',
-                                                'updateTime'=> '刚刚',
+                                                'updateTime'=> uc_time_format($nowTime),
                                                 'listType'=>3,
                                                 'type'=>1,
                                                 'num'=>1,
@@ -299,7 +299,7 @@ class Swoole extends Server
                                         'name'=> $data['name'],
                                         'firstChar'=>'☆',
                                         'images'=>'/static/image/group.png',
-                                        'updateTime'=> '刚刚',
+                                        'updateTime'=> uc_time_format($nowTime),
                                         'listType'=>2,
                                         'type'=>1,
                                         'num'=>1,
@@ -508,7 +508,7 @@ class Swoole extends Server
                                         'name'=> $one['name'],
                                         'firstChar'=>'☆',
                                         'images'=>$one['icon'],
-                                        'updateTime'=> '刚刚',
+                                        'updateTime'=> uc_time_format($nowTime),
                                         'listType'=>2,
                                         'type'=>1,
                                         'num'=>1,
@@ -693,7 +693,7 @@ class Swoole extends Server
                                         'firstChar'=> getFirstChar($f2_nickname),
                                         'signature'=> $f2['signature'],
                                         'images'=>$f2['avatar'],
-                                        'updateTime'=> '刚刚',
+                                        'updateTime'=> uc_time_format($nowTime),
                                         'listType'=>1,
                                         'type'=>1,
                                         'num'=>1,
@@ -710,7 +710,7 @@ class Swoole extends Server
                                         'firstChar'=>getFirstChar($f1_nickname),
                                         'signature'=> $f1['signature'],
                                         'images'=>$f1['avatar'],
-                                        'updateTime'=> '刚刚',
+                                        'updateTime'=> uc_time_format($nowTime),
                                         'listType'=>1,
                                         'type'=>1,
                                         'num'=>1,
@@ -793,7 +793,8 @@ class Swoole extends Server
                                         'read_time' =>$nowTime,
                                     ]);
                                     $readMsgIds[] = $updateId;
-                                    $msg_list[$k]['create_time'] = date('i:s',$v['create_time']);
+                                    //$msg_list[$k]['create_time'] = date('H:i',$v['create_time']);
+                                    $msg_list[$k]['create_time'] = uc_time_format($v['create_time']);
                                     $msg_list[$k]['status'] = 3;
                                 }
                                 //优化-如果涉及图片等可尝试使用base_64进行编码
@@ -930,7 +931,7 @@ class Swoole extends Server
                             $message_id = Db::table('df_message')->insert($message,false,true,'id');
                             if($message_id>0){
                                 $message['id'] = $message_id;
-                                $message['update_time'] = date('i:s',$nowTime);
+                                $message['update_time'] = uc_time_format($nowTime);
                                 //消息保存成功下发给双方
                                 $res_me = json_encode([
                                     'type'=>'receiveMassage',
@@ -959,7 +960,7 @@ class Swoole extends Server
                                 $one['images'] = $sendUserInfo['avatar'];
                                 $one['listType'] = 1;
                                 $one['num'] = 1;
-                                $one['updateTime'] = '刚刚';
+                                $one['updateTime'] = uc_time_format($nowTime);
                                 $one['msg'] = $message['content'];
                                 $one['status'] = 1;
                                 $one['type'] = $message['type'];
@@ -1046,7 +1047,7 @@ class Swoole extends Server
                             if($message_id>0){
                                 $info = Db::table('df_member')->where('id',$send_mid)->field('id,username,nickname,avatar')->find();
                                 $message['id'] = $message_id;
-                                $message['update_time'] = '刚刚';
+                                $message['update_time'] = uc_time_format($nowTime);
                                 $message['avatar'] = $info['avatar'];
                                 $message['name'] = !empty($info['nickname']) ? $info['nickname'] : $info['username'];
                                 //消息保存成功下发给所有人
@@ -1068,7 +1069,7 @@ class Swoole extends Server
                                     'name'=> $groupFind['name'],
                                     'firstChar'=>'☆',
                                     'images'=>'/static/image/group.png',
-                                    'updateTime'=> '刚刚',
+                                    'updateTime'=> uc_time_format($nowTime),
                                     'listType'=>2,
                                     'type'=>1,
                                     'num'=>1,
@@ -1109,7 +1110,7 @@ class Swoole extends Server
                                     $one['images'] = $friend['avatar'];
                                     $one['listType'] = 1;
                                     $one['num'] = 0;
-                                    $one['updateTime'] = '刚刚';
+                                    $one['updateTime'] = uc_time_format($nowTime);
                                     $one['msg'] = '';
                                     $one['status'] = 1;
                                     $one['type'] = 1;
@@ -1137,7 +1138,7 @@ class Swoole extends Server
                                         $one['images'] = $group['icon'];
                                         $one['listType'] = 2;
                                         $one['num'] = 0;
-                                        $one['updateTime'] = '刚刚';
+                                        $one['updateTime'] = uc_time_format($nowTime);
                                         $one['msg'] = '';
                                         $one['status'] = 1;
                                         $one['type'] = 1;

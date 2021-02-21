@@ -55,6 +55,26 @@ if (!function_exists('uc_time_ago')) {
     }
 }
 
+if (!function_exists('uc_time_format')) {
+    function uc_time_format($etime) {
+        $no=date("H",$etime);
+        $format = date('H:i',$etime);
+        if ($no>0&&$no<=6){
+            return "凌晨" . $format;
+        }
+        if ($no>6&&$no<12){
+            return "上午" . $format;
+        }
+        if ($no>=12&&$no<=18){
+            return "下午" . $format;
+        }
+        if ($no>18&&$no<=24){
+            return "晚上" . $format;
+        }
+        return $format;
+    }
+}
+
 if (!function_exists('getFirstChar')) {
     function getFirstChar($s0) {
         $fchar = ord(substr($s0, 0, 1));
