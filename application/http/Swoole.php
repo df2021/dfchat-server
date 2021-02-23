@@ -15,9 +15,9 @@ class Swoole extends Server
     protected $serverType = 'socket';
     protected $port = 9502;
     protected $option = [
-        'worker_num'=> 1, //调试时改为1
-        'daemonize'	=> false, //调试时设为false
-        'backlog'	=> 128
+        'worker_num'=> 4, //调试时改为1
+        'daemonize'	=> true, //调试时设为false
+        'backlog'	=> 1280
     ];
 
     /*public function onReceive($server, $fd, $from_id, $data)
