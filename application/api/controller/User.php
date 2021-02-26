@@ -7,6 +7,7 @@ namespace app\api\controller;
 use app\api\model\Member as MemberModel;
 use app\api\validate\Member;
 use think\captcha\Captcha;
+use think\helper\Hash;
 
 class User extends Index
 {
@@ -61,6 +62,39 @@ class User extends Index
         $captcha = new Captcha($config);
         $captcha->fontttf = '5.ttf';
         return $captcha->entry($token);
+    }
+
+    public function resetPassword()
+    {
+        if($this->request->isPost()){
+            $param = $this->request->post();
+            $data = [
+                'username'  => $param['username'],
+                'password'  => $param['password'],
+                'newPassword'  => $param['newPassword'],
+            ];
+            //验证
+            $validate = new Member();
+            $verification = $validate->scene('login')->check($data);
+            if(true!==$verification){
+                return json(['code'=>-1, 'error'=>$validate->getError()]);
+            }
+            $member = new MemberModel();
+            $member_password = $member->where('username',$data['username'])->where('status',1)->value('password');
+            if(!Hash::check($data['password'],$member_password)){
+                return json(['code'=>-1, 'error'=>'原密码输入错误']);
+            }
+            $newPassword = Hash::make($data['newPassword']);
+            $member_info = $member->where('username',$data['username'])->setField('password',$newPassword);
+            if(!$member_info){
+                return json(['code'=>-1, 'error'=>$member->getError()]);
+            }
+            return json([
+                'code'=>0,
+                'msg'=>'修改成功'
+            ]);
+        }
+        return null;
     }
 
     public function login()

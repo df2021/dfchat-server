@@ -116,7 +116,7 @@ class Index extends Admin
             ->addFormItems([ // 批量添加表单项
                 ['hidden', 'id'],
                 ['static', 'username', '用户名', '不可更改'],
-                ['static', 'usdt_address', 'USDT地址', '不可更改'],
+//                ['static', 'usdt_address', 'USDT地址', '不可更改'],
                 ['password', 'password', '密码', '必填，6-20位'],
                 ['radio', 'status', '状态', '', ['禁用', '启用']]
             ])

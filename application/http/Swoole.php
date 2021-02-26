@@ -16,7 +16,7 @@ class Swoole extends Server
     protected $port = 9502;
     protected $option = [
         'worker_num'=> 4, //调试时改为1
-        'daemonize'	=> true, //调试时设为false
+        'daemonize'	=> false, //调试时设为false
         'backlog'	=> 1280
     ];
 
@@ -102,9 +102,9 @@ class Swoole extends Server
                                 array_push($list,$one);
                             }
 
-                            //好友(未读的)
+                            //好友
                             $map1= [
-                                ['status','<',3],
+                                //['status','<',3],
                                 ['to_mid','=',$send_mid]
                             ];
                             $field_friend = 'id,type,send_mid,to_mid,content,status,update_time,send_time,read_time,receive_time';
@@ -114,10 +114,11 @@ class Swoole extends Server
                                 ->order('id','desc')
                                 ->buildSql();
                             $last_msg = Db::table($subQuery_friend.' f')
-                                ->field($field_friend.', count(f.status) as num')
+                                ->field($field_friend.', sum(IF(f.status<3,1,0)) as num')
                                 ->group('send_mid')
                                 ->limit(500)
                                 ->select();
+
                             if(!empty($last_msg)){
                                 foreach ($last_msg as $item){
                                     $friend = Db::table('df_member')
@@ -132,7 +133,7 @@ class Swoole extends Server
                                     $one['listType'] = 1;
                                     $one['updateTime'] = uc_time_ago($item['update_time']);
                                     $one['msg'] = $item['content'];
-                                    $one['num'] = $item['num'];
+                                    $one['num'] = (int)$item['num'];
                                     $one['status'] = 1;
                                     $one['type'] = $item['type'];
                                     $one['dataId'] = $item['id'];
@@ -141,14 +142,15 @@ class Swoole extends Server
                             }
 
 
-                            //群组(未读的)
-                            $map1_group= [
-                                ['status','<',3],
-                                ['to_mid','=',$send_mid]
-                            ];
+                            //群组
+                            $me_in_group = Db::table('df_member')->where('id',$send_mid)->value('groups');
+                            $groupIds = explode(',',$me_in_group);
+                            /*$map1_group= [
+                                ['group_id','in',$groupIds]
+                            ];*/
                             $field_group = 'id,group_id,type,send_mid,content,status,update_time,send_time,read_time,receive_time';
                             $subQuery_group = Db::table('df_message_group')
-                                ->where($map1_group)
+                                ->where('group_id','in',$groupIds)
                                 ->field($field_group)
                                 ->order('id','desc')
                                 ->buildSql();
@@ -161,12 +163,12 @@ class Swoole extends Server
                                 foreach ($last_group_msg as $item){
                                     //查群信息
                                     $group = Db::table('df_group')
-                                        ->where('group_id',$item['group_id'])
+                                        ->where('id',$item['group_id'])
                                         ->where('status',1)
                                         ->field('id,name,status,icon,created_mid')
                                         ->find();
 
-                                    $one['userId'] = $item['created_mid'];
+                                    $one['userId'] = $group['created_mid'];
                                     $one['groupId'] = $group['id'];
                                     $one['name'] = $group['name'];
                                     $one['firstChar'] = '☆';
@@ -797,19 +799,7 @@ class Swoole extends Server
                                     $msg_list[$k]['create_time'] = uc_time_format($v['create_time']);
                                     $msg_list[$k]['status'] = 3;
                                 }
-                                //优化-如果涉及图片等可尝试使用base_64进行编码
-                                $res = [
-                                    'type' => 'getMessage',
-                                    'data' => $msg_list
-                                ];
-                                $res = json_encode($res,JSON_UNESCAPED_UNICODE);
-                                $me_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
-                                // 需要先判断是否是正确的websocket连接，否则有可能会push失败
-                                foreach ($me_fds as $fd){
-                                    if($server->isEstablished($fd)){
-                                        $server->push($fd,$res);
-                                    }
-                                }
+
                                 //
                                 $to_res = [
                                     'type' => 'batchReadMsg',
@@ -821,6 +811,20 @@ class Swoole extends Server
                                     if($server->isEstablished($fd)){
                                         $server->push($fd,$to_res);
                                     }
+                                }
+                            }else{
+                                $msg_list = [];
+                            }
+                            $res = [
+                                'type' => 'getMessage',
+                                'data' => $msg_list
+                            ];
+                            $res = json_encode($res,JSON_UNESCAPED_UNICODE);
+                            $me_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
+                            // 需要先判断是否是正确的websocket连接，否则有可能会push失败
+                            foreach ($me_fds as $fd){
+                                if($server->isEstablished($fd)){
+                                    $server->push($fd,$res);
                                 }
                             }
                             break;//聊天窗口获取消息
@@ -839,6 +843,7 @@ class Swoole extends Server
                                 $where[] = ['id','<',$lastId];
                             }
                             $limit = (isset($data['limit']) && $data['limit']<=15) ? $data['limit'] : 15 ;
+
                             $msg_list = Db::table('df_message_group')
                                 ->where($where)
                                 ->limit($limit)
@@ -847,7 +852,7 @@ class Swoole extends Server
                             if(!empty($msg_list)){
                                 foreach ($msg_list as $k=>$v)
                                 {
-                                    $msg_list[$k]['create_time'] = date('i:s',$v['create_time']);
+                                    $msg_list[$k]['create_time'] = uc_time_format($v['create_time']);
                                     if($v['send_mid']>0){
                                         $info = Db::table('df_member')
                                             ->where('id',$v['send_mid'])
@@ -857,17 +862,20 @@ class Swoole extends Server
                                         $msg_list[$k]['avatar'] = $info['avatar'];
                                     }
                                 }
-                                $res = [
-                                    'type' => 'getGroupMessage',
-                                    'data' => $msg_list
-                                ];
-                                $res = json_encode($res,JSON_UNESCAPED_UNICODE);
-                                $me_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
-                                // 需要先判断是否是正确的websocket连接，否则有可能会push失败
-                                foreach ($me_fds as $fd){
-                                    if($server->isEstablished($fd)){
-                                        $server->push($fd,$res);
-                                    }
+
+                            }else{
+                                $msg_list = [];
+                            }
+                            $res = [
+                                'type' => 'getGroupMessage',
+                                'data' => $msg_list
+                            ];
+                            $res = json_encode($res,JSON_UNESCAPED_UNICODE);
+                            $me_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
+                            // 需要先判断是否是正确的websocket连接，否则有可能会push失败
+                            foreach ($me_fds as $fd){
+                                if($server->isEstablished($fd)){
+                                    $server->push($fd,$res);
                                 }
                             }
                             break;

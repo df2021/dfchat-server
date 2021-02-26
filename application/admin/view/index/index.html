@@ -18,14 +18,14 @@
 
 {block name="script"}
 <script>
-    $(document).ready(function () {
-        $.ajax({
-            url: '{:url("checkUpdate")}',
-            type: 'GET'
-        }).done(function(data) {
-            $('#product-auth').html(data.auth);
-            $('#product-update').html($('#product-update').text() + ' ' + data.update);
-        });
-    });
+    // $(document).ready(function () {
+    //     $.ajax({
+    //         url: '{:url("checkUpdate")}',
+    //         type: 'GET'
+    //     }).done(function(data) {
+    //         $('#product-auth').html(data.auth);
+    //         $('#product-update').html($('#product-update').text() + ' ' + data.update);
+    //     });
+    // });
 </script>
 {/block}

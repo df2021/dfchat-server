@@ -4,6 +4,8 @@
 namespace app\api\controller;
 
 
+use think\Db;
+
 class Chat extends Index
 {
     public function uploadVoice()
@@ -75,4 +77,22 @@ class Chat extends Index
         }
         return null;
     }
+
+    public function getThirdLink()
+    {
+        if($this->request->isPost()){
+            $list = Db::table('df_third_link')->field('id,name,url')->select();
+            if(!empty($list)){
+                return json([
+                    'code'=>0,
+                    'data'=>$list
+                ]);
+            }else{
+                return json(['code'=>-1, 'error'=>'未配置']);
+            }
+
+        }
+        return null;
+    }
+
 }
