@@ -91,7 +91,7 @@ class Swoole extends Server
                                 $one['userId'] = $apply['send_mid'];
                                 $one['name'] = '验证消息';//可根据type字段来自定义
                                 $one['images'] = $apply['icon'];
-                                $one['updateTime'] = uc_time_ago($apply['update_time']) ;
+                                $one['updateTime'] = uc_time_ago($apply['create_time']) ;
                                 $one['listType'] = 3;
                                 $one['firstChar'] = '';
                                 $one['status'] = $apply['status'];
@@ -105,9 +105,9 @@ class Swoole extends Server
                             //好友
                             $map1= [
                                 //['status','<',3],
-                                ['to_mid','=',$send_mid]
+                                ['to_mid|send_mid','=',$send_mid]
                             ];
-                            $field_friend = 'id,type,send_mid,to_mid,content,status,update_time,send_time,read_time,receive_time';
+                            $field_friend = 'id,type,send_mid,to_mid,content,status,create_time,update_time,send_time,read_time,receive_time';
                             $subQuery_friend = Db::table('df_message')
                                 ->field($field_friend)
                                 ->where($map1)
@@ -115,32 +115,47 @@ class Swoole extends Server
                                 ->buildSql();
                             $last_msg = Db::table($subQuery_friend.' f')
                                 ->field($field_friend.', sum(IF(f.status<3,1,0)) as num')
-                                ->group('send_mid')
-                                ->limit(500)
+                                ->group('send_mid,to_mid')
+                                //->limit(500)
                                 ->select();
 
                             if(!empty($last_msg)){
+                                $f_id = [];
                                 foreach ($last_msg as $item){
+                                    $sendId = $item['send_mid']==$send_mid ? $item['to_mid'] : $item['send_mid'];
+                                    if($item['send_mid']==$send_mid){
+                                        $item['num'] = 0;
+                                    }
+                                    if(!isset($f_id[$sendId])){
+                                        $f_id[$sendId] = $item;
+                                    }else{
+                                        if($f_id[$sendId]['id']<$item['id']){
+                                            $f_id[$sendId] = $item;
+                                        }
+                                    }
+                                }
+                                foreach ($f_id as $sid => $item){
                                     $friend = Db::table('df_member')
-                                        ->where('id',$item['send_mid'])
+                                        ->where('id',$sid)
                                         ->where('status',1)
                                         ->field('id,username,nickname,avatar')
                                         ->find();
-                                    $one['userId'] = $item['send_mid'];
+                                    $item['num'] += 0;
+                                    $one['userId'] = $sid;
                                     $one['name'] = !empty($friend['nickname']) ? $friend['nickname'] : $friend['username'];//可根据type字段来自定义
                                     $one['images'] = $friend['avatar'];
                                     $one['firstChar'] = getFirstChar($one['name']);
                                     $one['listType'] = 1;
-                                    $one['updateTime'] = uc_time_ago($item['update_time']);
+                                    $one['updateTime'] = uc_time_ago($item['create_time']);
                                     $one['msg'] = $item['content'];
-                                    $one['num'] = (int)$item['num'];
-                                    $one['status'] = 1;
+                                    $one['num'] = $item['num'];
+                                    $one['status'] = $item['status'];
                                     $one['type'] = $item['type'];
                                     $one['dataId'] = $item['id'];
                                     array_push($list,$one);
                                 }
-                            }
 
+                            }
 
                             //群组
                             $me_in_group = Db::table('df_member')->where('id',$send_mid)->value('groups');
@@ -148,19 +163,27 @@ class Swoole extends Server
                             /*$map1_group= [
                                 ['group_id','in',$groupIds]
                             ];*/
-                            $field_group = 'id,group_id,type,send_mid,content,status,update_time,send_time,read_time,receive_time';
+                            $field_group = 'id,group_id,type,send_mid,content,status,create_time,update_time,send_time,read_time,receive_time';
                             $subQuery_group = Db::table('df_message_group')
                                 ->where('group_id','in',$groupIds)
                                 ->field($field_group)
                                 ->order('id','desc')
                                 ->buildSql();
                             $last_group_msg = Db::table($subQuery_group.' g')
-                                ->field($field_group.',count(g.status) as num')
+                                ->field($field_group.', sum(IF(g.status>0,1,0)) as num')
                                 ->group('group_id')
                                 ->limit(50)
                                 ->select();
                             if(!empty($last_group_msg)){
                                 foreach ($last_group_msg as $item){
+                                    //计算未读条数
+                                    $read_num = Db::table('df_read_group_msg')
+                                        ->where('group_id',$item['group_id'])
+                                        ->where('uid',$send_mid)
+                                        ->where('status',3)
+                                        ->count();
+                                    $unReadNum = $item['num']-$read_num;
+                                    $unReadNum += 0;
                                     //查群信息
                                     $group = Db::table('df_group')
                                         ->where('id',$item['group_id'])
@@ -174,8 +197,8 @@ class Swoole extends Server
                                     $one['firstChar'] = '☆';
                                     $one['images'] = $group['icon'];
                                     $one['listType'] = 2;
-                                    $one['num'] = $item['num'];
-                                    $one['updateTime'] = uc_time_ago($item['update_time']);
+                                    $one['num'] = $unReadNum;
+                                    $one['updateTime'] = uc_time_ago($item['create_time']);
                                     $one['msg'] = $item['content'];
                                     $one['status'] = $item['status'];
                                     $one['type'] = $item['type'];
@@ -789,6 +812,7 @@ class Swoole extends Server
                                         ->value('id');
                                     Db::table('df_message')
                                         ->where('id',$updateId)
+                                        ->where('to_mid',$send_mid)
                                         ->update([
                                         'status' =>3,
                                         'update_time' =>$nowTime,
@@ -797,7 +821,7 @@ class Swoole extends Server
                                     $readMsgIds[] = $updateId;
                                     //$msg_list[$k]['create_time'] = date('H:i',$v['create_time']);
                                     $msg_list[$k]['create_time'] = uc_time_format($v['create_time']);
-                                    $msg_list[$k]['status'] = 3;
+                                    $msg_list[$k]['status'] = $v['status'];
                                 }
 
                                 //
@@ -852,6 +876,24 @@ class Swoole extends Server
                             if(!empty($msg_list)){
                                 foreach ($msg_list as $k=>$v)
                                 {
+                                    //读取
+                                    $isInserted = Db::table('df_read_group_msg')
+                                        ->where('uid',$send_mid)
+                                        ->where('group_msg_id',$v['id'])
+                                        ->where('status',3)
+                                        ->value('id');
+                                    if(!$isInserted){
+                                        Db::table('df_read_group_msg')->insert([
+                                            'uid' => $send_mid,
+                                            'group_id' => $v['group_id'],
+                                            'group_msg_id' => $v['id'],
+                                            'status' => 3,
+                                            'create_time' => $nowTime,
+                                            'update_time' => $nowTime,
+                                        ]);
+                                    }
+
+                                    //===============
                                     $msg_list[$k]['create_time'] = uc_time_format($v['create_time']);
                                     if($v['send_mid']>0){
                                         $info = Db::table('df_member')
@@ -940,28 +982,13 @@ class Swoole extends Server
                             if($message_id>0){
                                 $message['id'] = $message_id;
                                 $message['update_time'] = uc_time_format($nowTime);
-                                //消息保存成功下发给双方
-                                $res_me = json_encode([
-                                    'type'=>'receiveMassage',
-                                    'data'=>$message
-                                ],JSON_UNESCAPED_UNICODE);
-
-                                $me_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
-                                foreach ($me_fds as $fd){
-                                    if($server->isEstablished($fd)){
-                                        $server->push($fd,$res_me);
-                                    }
-                                }
-
-                                $res_to = json_encode([
-                                    'type'=>'receiveMassage',
-                                    'data'=>$message
-                                ],JSON_UNESCAPED_UNICODE);
                                 $sendUserInfo = Db::table('df_member')
                                     ->where('id',$message['send_mid'])
                                     ->where('status',1)
                                     ->field('id,username,nickname,avatar')
                                     ->find();
+
+
                                 $one['userId'] = $sendUserInfo['id'];
                                 $one['name'] = !empty($sendUserInfo['nickname']) ? $sendUserInfo['nickname'] : $sendUserInfo['username'];;
                                 $one['firstChar'] = getFirstChar($one['name']);
@@ -977,6 +1004,18 @@ class Swoole extends Server
                                     'type'=>'pushMessage',
                                     'data'=>$one
                                 ],JSON_UNESCAPED_UNICODE);
+                                //消息保存成功下发给双方
+                                $res_to = $res_me = json_encode([
+                                    'type'=>'receiveMessage',
+                                    'data'=>$one
+                                ],JSON_UNESCAPED_UNICODE);
+
+                                $me_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
+                                foreach ($me_fds as $fd){
+                                    if($server->isEstablished($fd)){
+                                        $server->push($fd,$res_me);
+                                    }
+                                }
                                 //redis 读取优化
                                 $fds = Db::table('df_socket_client')->where('user_id',$to_mid)->column('fd');
                                 foreach ($fds as $fd){
@@ -1058,13 +1097,8 @@ class Swoole extends Server
                                 $message['update_time'] = uc_time_format($nowTime);
                                 $message['avatar'] = $info['avatar'];
                                 $message['name'] = !empty($info['nickname']) ? $info['nickname'] : $info['username'];
-                                //消息保存成功下发给所有人
-                                $res_me = json_encode([
-                                    'type'=>'receiveGroupMassage',
-                                    'data'=>$message
-                                ],JSON_UNESCAPED_UNICODE);
 
-                                $groupFind = Db::table('df_group')->where('id',$group_id)->field('id,members,name')->find();
+                                $groupFind = Db::table('df_group')->where('id',$group_id)->field('id,members,icon,name')->find();
                                 $members = $groupFind['members'];
                                 $members = explode(',',$members);
                                 $me_fds = Db::table('df_socket_client')->where('user_id','in',$members)->column('fd');
@@ -1075,17 +1109,24 @@ class Swoole extends Server
                                     'groupId'=>$group_id,
                                     'userId'=>$send_mid,
                                     'name'=> $groupFind['name'],
+                                    'sender'=> !empty($info['nickname']) ? $info['nickname'] : $info['username'],
+                                    'face'=> $info['avatar'],
                                     'firstChar'=>'☆',
-                                    'images'=>'/static/image/group.png',
+                                    'images'=>$groupFind['icon'],
                                     'updateTime'=> uc_time_format($nowTime),
                                     'listType'=>2,
-                                    'type'=>1,
+                                    'type'=>$message['type'],
                                     'num'=>1,
-                                    'status'=>0,
+                                    'status'=>1,
                                     'msg'=>$content,
                                 ];
                                 $push_to = json_encode([
                                     'type'=>'pushMessage',
+                                    'data'=>$one
+                                ],JSON_UNESCAPED_UNICODE);
+                                //消息保存成功下发给所有人
+                                $res_me = json_encode([
+                                    'type'=>'receiveGroupMessage',
                                     'data'=>$one
                                 ],JSON_UNESCAPED_UNICODE);
 
