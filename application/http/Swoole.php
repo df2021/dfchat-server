@@ -83,7 +83,7 @@ class Swoole extends Server
                             //验证(未验证的)
                             $apply_list = Db::table('df_apply')
                                 ->where('to_mid',$send_mid)
-                                ->where('status',0)
+                                //->where('status',0)
                                 ->order('id','desc')
                                 ->select();
                             foreach ($apply_list as $apply)
@@ -97,7 +97,7 @@ class Swoole extends Server
                                 $one['status'] = $apply['status'];
                                 $one['msg'] = $apply['content'];
                                 $one['type'] = $apply['type'];
-                                $one['num'] = 1;
+                                $one['num'] = $apply['status']>0 ? 0 : 1;
                                 $one['dataId'] = $apply['id'];
                                 array_push($list,$one);
                             }
@@ -705,6 +705,33 @@ class Swoole extends Server
                                 $f2 = Db::table('df_member')->where('id',$data['user_id'])->find();
                                 $f1_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
                                 $f2_fds = Db::table('df_socket_client')->where('user_id',$data['user_id'])->column('fd');
+                                //保存消息到数据库
+                                $content = json_encode([
+                                    'text' => '我们已经加为好友了，可以开始聊天了！',
+                                    'type' => 'word'
+                                ],JSON_UNESCAPED_UNICODE);
+                                $message1 = [
+                                    'send_mid' => $send_mid,
+                                    'to_mid' => $data['user_id'],
+                                    'type' => 1,
+                                    'status' => 1,
+                                    'content' => $content,
+                                    'create_time' => $nowTime,
+                                    'update_time' => $nowTime,
+                                    'send_time' => $nowTime,
+                                ];
+                                /*$message2 = [
+                                    'send_mid' => $data['user_id'],
+                                    'to_mid' => $send_mid,
+                                    'type' => 1,
+                                    'status' => 1,
+                                    'content' => $content,
+                                    'create_time' => $nowTime,
+                                    'update_time' => $nowTime,
+                                    'send_time' => $nowTime,
+                                ];
+                                Db::table('df_message')->insert($message2);*/
+                                Db::table('df_message')->insert($message1);
                                 Db::commit();
                                 //向对方发送验证通过信息
                                 $f1_nickname = !empty($f1['nickname']) ? $f1['nickname'] : $f1['username'];
@@ -723,7 +750,7 @@ class Swoole extends Server
                                         'type'=>1,
                                         'num'=>1,
                                         'status'=>1,
-                                        'msg'=>$f2_nickname.'成为您好友',
+                                        'msg'=>$f2_nickname.'成为您的好友',
                                     ]
                                 ],JSON_UNESCAPED_UNICODE);
                                 $res2 = json_encode([
@@ -1121,7 +1148,7 @@ class Swoole extends Server
                                     'msg'=>$content,
                                 ];
                                 $push_to = json_encode([
-                                    'type'=>'pushMessage',
+                                    'type'=>'pushGroupMessage',
                                     'data'=>$one
                                 ],JSON_UNESCAPED_UNICODE);
                                 //消息保存成功下发给所有人
