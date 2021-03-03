@@ -184,6 +184,9 @@ class Swoole extends Server
                                         ->count();
                                     $unReadNum = $item['num']-$read_num;
                                     $unReadNum += 0;
+                                    if($unReadNum<0){ //如果记录被删的情况
+                                        $unReadNum=0;
+                                    }
                                     //查群信息
                                     $group = Db::table('df_group')
                                         ->where('id',$item['group_id'])
