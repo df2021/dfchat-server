@@ -16,7 +16,7 @@ class Swoole extends Server
     protected $port = 9502;
     protected $option = [
         'worker_num'=> 4, //调试时改为1
-        'daemonize'	=> false, //调试时设为false
+        'daemonize'	=> true, //调试时设为false
         'backlog'	=> 1280
     ];
 
@@ -221,13 +221,45 @@ class Swoole extends Server
                         case 'addFriend':
                             $to_mid = $data['to_mid'];
                             $content = $data['content'];
+                            //拦截群成员加好友的情况
+                            $groups = Db::table('df_group')->where('status',1)->field('id,name,manage,members')->select();
+                            $groupManage = [];
+                            $groupMember = [];
+                            foreach ($groups as $groupItem){
+                                $itemManage = explode(',',$groupItem['manage']);
+                                $itemMember = explode(',',$groupItem['members']);
+                                $groupManage = array_merge($groupManage,$itemManage);
+                                $groupMember = array_merge($groupMember,$itemMember);
+                            }
+                            //对方是群内成员且不是管理员不能申请加好友
+                            if(in_array($to_mid,$groupMember) && !in_array($to_mid,$groupManage)){
+                                $checked = [
+                                    'type' => 'checkAddFriend',
+                                    'data' => [
+                                        'code' => -1,
+                                        'error' => '对方屏蔽加好友'
+                                    ]
+                                ];
+                                $checked = json_encode($checked,JSON_UNESCAPED_UNICODE);
+                                $server->push($frame->fd,$checked);
+                                return null;
+                            }
+                            //发出申请
                             $apply_id = Db::table('df_apply')
                                 ->where('send_mid',$send_mid)
                                 ->where('to_mid',$to_mid)
                                 ->where('status',0)
                                 ->value('id');
                             if($apply_id>0){
-                                $server->push($frame->fd,'已发出过同样的申请');
+                                $checked = [
+                                    'type' => 'checkAddFriend',
+                                    'data' => [
+                                        'code' => -1,
+                                        'error' => '已发出过同样的申请'
+                                    ]
+                                ];
+                                $checked = json_encode($checked,JSON_UNESCAPED_UNICODE);
+                                $server->push($frame->fd,$checked);
                             }else{
                                 $insert_data = [
                                     'send_mid' => $send_mid,
