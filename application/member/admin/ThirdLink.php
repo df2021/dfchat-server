@@ -22,7 +22,7 @@ class ThirdLink extends Admin
                 ['name', '名称'],
                 ['url', '链接地址','text.edit'],
                 ['create_time', '创建时间', 'datetime'],
-                ['update_time', '创建时间', 'datetime'],
+                ['update_time', '更新时间', 'datetime'],
                 ['right_button', '操作', 'btn']
             ])
             //->setColumnWidth('last_login_ip', 180)

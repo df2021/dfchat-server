@@ -39,6 +39,42 @@ class Chat extends Index
         return null;
     }
 
+    public function uploadVideo()
+    {
+        if(!empty($_FILES)){
+//            $allowedExts = array("mp3", "jpeg", "jpg", "png","ico");
+            $temp = explode(".", $_FILES["file"]["name"]);
+            $extension = end($temp);     // 获取文件后缀名
+            if (
+
+                $_FILES["file"]["size"] < 51200000)  // 小于 5M
+
+            {
+                $path = '/uploads/videos/'.date('Ymd',time())."/";
+                $new_dir = $_SERVER["DOCUMENT_ROOT"].$path;
+                if(!file_exists($new_dir)){
+                    //检查是否有该文件夹，如果没有就创建，并给予最高权限
+                    mkdir($new_dir, 0755,true);
+                }
+
+                $bool = move_uploaded_file($_FILES["file"]["tmp_name"], $new_dir . $_FILES["file"]["name"]);
+                if($bool){
+                    return json([
+                        'code'=>0,
+                        'url'=>$path . $_FILES["file"]["name"],
+                        'msg'=>'success'
+                    ]);
+                }
+            }else{
+                return json([
+                    'code'=>-1,
+                    'msg'=>'超出大小限制'
+                ]);
+            }
+        }
+        return null;
+    }
+
     public function upload()
     {
         if(!empty($_FILES)){

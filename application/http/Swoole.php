@@ -313,7 +313,17 @@ class Swoole extends Server
                                 }else{
                                     Db::table('df_member')->where('id',$send_mid)->setField('groups',$group_id);
                                 }
-
+                                $systemMsg = [
+                                    'type' => 1,
+                                    'status' => 1,
+                                    'content' => '创建成功',
+                                    'create_time' => $nowTime,
+                                    'update_time' => $nowTime,
+                                    'send_time' => $nowTime,
+                                    'group_id' => $group_id,
+                                ];
+                                //保存消息到数据库
+                                Db::table('df_message_group')->insert($systemMsg);
                                 Db::commit();
                                 $res = [
                                     'type' => 'addedGroup',
@@ -323,7 +333,7 @@ class Swoole extends Server
                                         'userId'=>$send_mid,
                                         'name'=> $data['name'],
                                         'firstChar'=>'☆',
-                                        'images'=>'/static/image/group.png',
+                                        'images'=>$_SERVER['HTTP_REFERER'].'static/home/img/group.png',
                                         'updateTime'=> uc_time_format($nowTime),
                                         'listType'=>2,
                                         'type'=>1,
@@ -332,6 +342,7 @@ class Swoole extends Server
                                         'msg'=>'创建成功',
                                     ]
                                 ];
+
                                 $res = json_encode($res,JSON_UNESCAPED_UNICODE);
                                 foreach ($fds as $fd){
                                     if($server->isEstablished($fd)){
@@ -561,10 +572,11 @@ class Swoole extends Server
                                         ->where('id',$item)
                                         ->find();
                                     $name = !empty($info['nickname']) ? $info['nickname'] : $info['username'];
-                                    $content = json_encode([
+                                    /*$content = json_encode([
                                         'text' => $name.'加入',
                                         'type' => 'word'
-                                    ],JSON_UNESCAPED_UNICODE);
+                                    ],JSON_UNESCAPED_UNICODE);*/
+                                    $content = $name.'加入';
                                     $message = [
                                         'type' => 1,
                                         'status' => 1,
@@ -643,10 +655,11 @@ class Swoole extends Server
                                         foreach ($userIds as $uid){
                                             $info = Db::table('df_member')->field('id,username,nickname')->where('id',$uid)->find();
                                             $name = !empty($info['nickname']) ? $info['nickname'] : $info['username'];
-                                            $content = json_encode([
+                                            /*$content = json_encode([
                                                 'text' => $name.'被移出',
                                                 'type' => 'word'
-                                            ],JSON_UNESCAPED_UNICODE);
+                                            ],JSON_UNESCAPED_UNICODE);*/
+                                            $content = $name.'被移出';
                                             $message = [
                                                 'type' => 1,
                                                 'status' => 1,
@@ -706,10 +719,11 @@ class Swoole extends Server
                                 $f1_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
                                 $f2_fds = Db::table('df_socket_client')->where('user_id',$data['user_id'])->column('fd');
                                 //保存消息到数据库
-                                $content = json_encode([
+                                /*$content = json_encode([
                                     'text' => '我们已经加为好友了，可以开始聊天了！',
                                     'type' => 'word'
-                                ],JSON_UNESCAPED_UNICODE);
+                                ],JSON_UNESCAPED_UNICODE);*/
+                                $content = '我们已经加为好友了，可以开始聊天了！';
                                 $message1 = [
                                     'send_mid' => $send_mid,
                                     'to_mid' => $data['user_id'],
@@ -1091,6 +1105,27 @@ class Swoole extends Server
                             }
 
                             break;
+                        case 'readGroupMsg':
+                            if(!isset($data['id']) || !isset($data['readUid']) || !isset($data['readEd']) || !isset($data['group_id']) ){
+                                return null;
+                            }
+                            //读取
+                            $isRead = Db::table('df_read_group_msg')
+                                ->where('uid',$data['readUid'])
+                                ->where('group_msg_id',$data['id'])
+                                ->where('status',3)
+                                ->value('id');
+                            if(!$isRead){
+                                Db::table('df_read_group_msg')->insert([
+                                    'uid' => $send_mid,
+                                    'group_id' => $data['group_id'],
+                                    'group_msg_id' => $data['id'],
+                                    'status' => 3,
+                                    'create_time' => $nowTime,
+                                    'update_time' => $nowTime,
+                                ]);
+                            }
+                            break;
                         case 'sendGroupMsg':
                             if(!isset($data['group_id'])){
                                 return '未获取到参数group_id';
@@ -1132,7 +1167,7 @@ class Swoole extends Server
 
                                 //推送至列表
                                 $one = [
-                                    'dataId'=>$group_id,
+                                    'dataId'=>$message_id,
                                     'groupId'=>$group_id,
                                     'userId'=>$send_mid,
                                     'name'=> $groupFind['name'],
