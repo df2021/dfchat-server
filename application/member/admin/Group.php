@@ -28,7 +28,7 @@ class Group extends Admin
                 ['name', '名称'],
                 ['icon', '图标','img_url'],
                 ['created_mid', '群主'],
-                ['members', '成员'],
+                ['members', '成员数量'],
                 ['create_time', '创建时间', 'datetime'],
                 ['update_time', '更新时间', 'datetime'],
                 ['right_button', '操作', 'btn']
