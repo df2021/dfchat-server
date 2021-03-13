@@ -38,6 +38,7 @@ class messageGroup extends Model
                 break;
             case 2:
                 $msg = '语音';
+                break;
             case 3:
                 $msg = json_decode($value,true);
                 $msg = '<img width="40px" height="40px" src='.$msg['url'].' />';

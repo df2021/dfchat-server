@@ -454,6 +454,12 @@ class Swoole extends Server
                             ],JSON_UNESCAPED_UNICODE);
                             $server->push($frame->fd, $res);
                             break;
+                        case 'delMessage':
+                            if(!isset($data['msg_id'])){
+                                return null;
+                            }
+                            Db::table('df_message')->where('id',$data['msg_id'])->delete();
+                            break;
                         //获取群信息
                         case 'getGroupInfo':
                             $gid = $data['group_id'];
@@ -1063,7 +1069,6 @@ class Swoole extends Server
                                     ->where('status',1)
                                     ->field('id,username,nickname,avatar')
                                     ->find();
-
 
                                 $one['userId'] = $sendUserInfo['id'];
                                 $one['name'] = !empty($sendUserInfo['nickname']) ? $sendUserInfo['nickname'] : $sendUserInfo['username'];;
