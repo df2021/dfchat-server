@@ -148,7 +148,30 @@ class User extends Index
                 return json(['code'=>-1, 'error'=>$validate->getError()]);
             }
             //添加默认头像
-            $data['avatar'] = '/static/image/boy.jpg';
+            $headImg = [
+                '/static/img/im/face/face_1.jpg',
+                '/static/img/im/face/face_2.jpg',
+                '/static/img/im/face/face_3.jpg',
+                '/static/img/im/face/face_4.jpg',
+                '/static/img/im/face/face_5.jpg',
+                '/static/img/im/face/face_6.jpg',
+                '/static/img/im/face/face_7.jpg',
+                '/static/img/im/face/face_8.jpg',
+                '/static/img/im/face/face_9.jpg',
+                '/static/img/im/face/face_10.jpg',
+                '/static/img/im/face/face_11.jpg',
+                '/static/img/im/face/face_12.jpg',
+                '/static/img/im/face/face_13.jpg',
+                '/static/img/im/face/face_14.jpg',
+                '/static/img/im/face/face_15.jpg',
+                '/static/image/boy.jpg',
+                '/static/image/girl.jpg',
+                '/static/image/guanxi.jpg',
+                '/static/image/huge.jpg'
+            ];
+            $rand_keys = array_rand($headImg, 1);
+            $data['avatar'] = $headImg[$rand_keys];
+//            $data['avatar'] = '/static/image/boy.jpg';
             $memberModel = model('member');
             if(true!==$memberModel->save($data)){
                 return json(['code'=>-1, 'error'=>$memberModel->getError()]);
