@@ -131,4 +131,58 @@ class Chat extends Index
         return null;
     }
 
+    public function getNote()
+    {
+        if($this->request->isPost()){
+            $list = Db::table('df_note')->field('id,title')->select();
+            if(!empty($list)){
+                return json([
+                    'code'=>0,
+                    'data'=>$list
+                ]);
+            }else{
+                return json(['code'=>-1, 'error'=>'未配置']);
+            }
+
+        }
+        return null;
+    }
+
+    public function getAgreeDoc()
+    {
+        if($this->request->isPost()){
+            $data = Db::table('df_system_config')->field('id,user_agreement,privacy_policy,create_time,update_time')->find();
+            if(!empty($data)){
+                return json([
+                    'code'=>0,
+                    'data'=>$data
+                ]);
+            }else{
+                return json(['code'=>-1, 'error'=>'没有数据']);
+            }
+
+        }
+        return null;
+    }
+
+    public function getNoteDetail()
+    {
+        if($this->request->isPost()){
+            $id = $this->request->param('id');
+            $data = Db::table('df_note')->field('id,title,content,create_time,update_time')
+                ->where('id',$id)
+                ->find();
+            if(!empty($data)){
+                $data['update_time'] = date('Y年m月d日 H:i',$data['update_time']);
+                return json([
+                    'code'=>0,
+                    'data'=>$data
+                ]);
+            }else{
+                return json(['code'=>-1, 'error'=>'没有数据']);
+            }
+
+        }
+        return null;
+    }
 }

@@ -7,6 +7,7 @@ namespace app\api\controller;
 use app\api\model\Member as MemberModel;
 use app\api\validate\Member;
 use think\captcha\Captcha;
+use think\Db;
 use think\helper\Hash;
 
 class User extends Index
@@ -176,6 +177,27 @@ class User extends Index
             if(true!==$memberModel->save($data)){
                 return json(['code'=>-1, 'error'=>$memberModel->getError()]);
             }
+            //自动添加客服
+            $uid = Db::table('df_member')->where('username',$data['username'])->value('id');
+            $kefuList = Db::table('df_member')->field('id,is_kefu,is_jianguan')->where('is_kefu|is_jianguan','=',1)->select();
+
+            $welcome = Db::table('df_system_config')->order('id','desc')->value('welcome');
+            foreach ($kefuList as $item){
+                if(!empty($welcome) && ($item['is_jianguan']==1)){
+                    $time = time();
+                    Db::table('df_message')->insert([
+                        'send_mid'=>$item['id'],
+                        'to_mid'=>$uid,
+                        'type'=>1,
+                        'status'=>1,
+                        'content'=>$welcome,
+                        'create_time'=>$time,
+                        'update_time'=>$time,
+                        'send_time'=>$time,
+                    ]);
+                }
+                $this->autoAddFriend($uid,$item['id']);
+            }
 
             //自动登录
             $member = new MemberModel();
@@ -193,6 +215,26 @@ class User extends Index
             ]);
         }
         return null;
+    }
+
+    public function autoAddFriend($uid,$friendUid){
+        $time = time();
+        //Db::startTrans();
+        Db::table('df_friends')->insertAll([
+            ['status'=>1, 'mid'=>$uid,'friend_mid'=>$friendUid,'create_time'=>$time,'update_time'=>$time],
+            ['status'=>1, 'mid'=>$friendUid,'friend_mid'=>$uid,'create_time'=>$time,'update_time'=>$time],
+        ],true);
+        Db::table('df_message')->insert([
+            'send_mid'=>$friendUid,
+            'to_mid'=>$uid,
+            'type'=>1,
+            'status'=>1,
+            'content'=>'我们已经成为好友了，可以开始聊天了！',
+            'create_time'=>$time,
+            'update_time'=>$time,
+            'send_time'=>$time,
+        ]);
+        //Db::commit();
     }
 
     public function logout()

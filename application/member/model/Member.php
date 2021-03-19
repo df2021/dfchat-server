@@ -39,12 +39,26 @@ class Member extends Model
     //获取器
     public function getLastLoginIpAttr($value)
     {
-        return long2ip($value);
+        if(is_numeric($value)){
+            return long2ip($value);
+        }
+        return $value;
 //        $ip_info = IPLoc::find($ip);
 //        $city = implode('',$ip_info);
         //dump($ip_info);
     }
 
+    public function getRoleAttr($value,$data)
+    {
+        $str = '用户';
+        if($data['is_kefu']==1){
+            $str .= '|客服';
+        }
+        if($data['is_jianguan']==1){
+            $str .= '|维权监管';
+        }
+        return $str;
+    }
     /*public function getLocationAttr($value,$data)
     {
         $ip = long2ip($data['last_login_ip']);

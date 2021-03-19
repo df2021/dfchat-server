@@ -1,26 +1,29 @@
 <?php
+
+
 namespace app\member\admin;
+
 
 use app\admin\controller\Admin;
 use app\common\builder\ZBuilder;
-use app\member\model\ThirdLink as ThirdLinkModel;
+use app\member\model\Note as NoteModel;
 
-class ThirdLink extends Admin
+class Note extends Admin
 {
     public function index()
     {
-        $data_list = ThirdLinkModel::where($this->getMap())
+        $data_list = NoteModel::where($this->getMap())
             ->order($this->getOrder('id desc'))
             ->paginate();
 
         return ZBuilder::make('table')
-            ->setPageTitle('第三方链接管理') // 设置页面标题
-            ->setTableName('third_link')
-            ->setSearch(['name' => '名称']) // 设置搜索参数
+            ->setPageTitle('系统公告') // 设置页面标题
+            ->setTableName('note')
+            ->setSearch(['name' => '标题']) // 设置搜索参数
             ->addColumns([
                 ['id', 'ID'],
-                ['name', '名称'],
-                ['url', '链接地址','text.edit'],
+                ['title', '标题'],
+//                ['content', '内容'],
                 ['create_time', '创建时间', 'datetime'],
                 ['update_time', '更新时间', 'datetime'],
                 ['right_button', '操作', 'btn']
@@ -38,7 +41,7 @@ class ThirdLink extends Admin
         // 保存数据
         if ($this->request->isPost()) {
             $data = $this->request->post();
-            if ($user = ThirdLinkModel::create($data)) {
+            if ($user = NoteModel::create($data)) {
                 // 记录行为
                 $this->success('新增成功', url('index'));
             } else {
@@ -50,8 +53,8 @@ class ThirdLink extends Admin
         return ZBuilder::make('form')
             ->setPageTitle('新增') // 设置页面标题
             ->addFormItems([ // 批量添加表单项
-                ['text', 'name', '名称'],
-                ['text', 'url', '链接地址'],
+                ['text', 'title', '标题'],
+                ['ckeditor', 'content', '内容'],
             ])
             ->fetch();
     }
@@ -64,23 +67,24 @@ class ThirdLink extends Admin
         if ($this->request->isPost()) {
             $data = $this->request->post();
 
-            if (ThirdLinkModel::update($data)) {
+            if (NoteModel::update($data)) {
                 $this->success('编辑成功', 'index');
             } else {
                 $this->error('编辑失败');
             }
         }
         // 获取数据
-        $info = ThirdLinkModel::where('id', $id)->find();
+        $info = NoteModel::where('id', $id)->find();
         // 使用ZBuilder快速创建表单
         return ZBuilder::make('form')
             ->setPageTitle('编辑') // 设置页面标题
             ->addFormItems([ // 批量添加表单项
                 ['hidden', 'id'],
-                ['text', 'name', '名称'],
-                ['text', 'url', '链接地址'],
+                ['text', 'title', '标题'],
+                ['ckeditor', 'content', '内容'],
             ])
             ->setFormData($info) // 设置表单数据
             ->fetch();
     }
+
 }

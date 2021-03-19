@@ -13,6 +13,7 @@ use app\admin\controller\Admin;
 use app\common\builder\ZBuilder;
 use app\member\model\Member as MemberModel;
 use think\facade\Hook;
+use think\Request;
 
 /**
  * 消息控制器
@@ -42,6 +43,8 @@ class Index extends Admin
             ->addColumns([
                 ['id', 'ID'],
                 ['username', '用户名'],
+                ['nickname', '昵称'],
+                ['role', '会员类型'],
                 //['balance', '余额'],
                 //['freeze_balance', '待提本佣金额'],
                 //['last_login_ip', '最近登录IP'],
@@ -65,6 +68,13 @@ class Index extends Admin
         // 保存数据
         if ($this->request->isPost()) {
             $data = $this->request->post();
+            $data['avatar'] = '/static/image/boy.jpg';
+            if(isset($data['is_jianguan']) && ($data['is_jianguan']==1)){
+                $data['avatar'] = \think\facade\Request::domain() .'/uploads/images/weiquan.jpg';
+            }
+            if(isset($data['is_kefu']) && ($data['is_kefu']==1)){
+                $data['avatar'] = '/static/logo.jpg';
+            }
             if ($user = MemberModel::create($data)) {
                 // 记录行为
                 action_log('member_add', 'member', $user['id'], UID);
@@ -80,13 +90,15 @@ class Index extends Admin
             ->setPageTitle('新增') // 设置页面标题
             ->addFormItems([ // 批量添加表单项
                 ['text', 'username', '用户名', '必填，可由英文字母、数字组成'],
-//                ['text', 'nickname', '昵称', '可以是中文'],
+                ['text', 'nickname', '昵称', '可以是中文'],
 //                ['select', 'role', '角色', '非超级管理员，禁止创建与当前角色同级的用户', $role_list],
 //                ['text', 'email', '邮箱', ''],
                 ['password', 'password', '密码', '必填，6-20位'],
 //                ['text', 'mobile', '手机号'],
 //                ['image', 'avatar', '头像'],
-                ['radio', 'status', '状态', '', ['禁用', '启用'], 1]
+                ['radio', 'is_kefu', '客服','',[0=>'否',1=>'是'],0],
+                ['radio', 'is_jianguan', '维权监管','',[0=>'否',1=>'是'],0],
+//                ['radio', 'status', '状态', '', ['禁用', '启用'], 1]
             ])
             ->fetch();
     }
@@ -98,7 +110,10 @@ class Index extends Admin
         // 保存数据
         if ($this->request->isPost()) {
             $data = $this->request->post();
-
+            // 如果没有填写密码，则不更新密码
+            if ($data['password'] == '') {
+                unset($data['password']);
+            }
             if (MemberModel::update($data)) {
                 $user = MemberModel::get($data['id']);
                 // 记录行为
@@ -116,8 +131,10 @@ class Index extends Admin
             ->addFormItems([ // 批量添加表单项
                 ['hidden', 'id'],
                 ['static', 'username', '用户名', '不可更改'],
-//                ['static', 'usdt_address', 'USDT地址', '不可更改'],
+                ['text', 'nickname', '昵称', '可以是中文'],
                 ['password', 'password', '密码', '必填，6-20位'],
+                ['radio', 'is_kefu', '客服','',[0=>'否',1=>'是']],
+                ['radio', 'is_jianguan', '维权监管','',[0=>'否',1=>'是']],
                 ['radio', 'status', '状态', '', ['禁用', '启用']]
             ])
             ->setFormData($info) // 设置表单数据
