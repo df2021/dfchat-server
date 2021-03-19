@@ -32,7 +32,7 @@ class Index extends Admin
     {
 
         $data_list = MemberModel::where($this->getMap())
-            ->order($this->getOrder('id desc,last_login_time'))
+            ->order($this->getOrder('is_kefu desc,id desc,last_login_time'))
             ->paginate();
 
         return ZBuilder::make('table')
@@ -110,6 +110,12 @@ class Index extends Admin
         // 保存数据
         if ($this->request->isPost()) {
             $data = $this->request->post();
+            if($data['is_jianguan']==1){
+                $role = session('user_auth.role');
+                if($role!=1){
+                    $this->error('权限不足');
+                }
+            }
             // 如果没有填写密码，则不更新密码
             if ($data['password'] == '') {
                 unset($data['password']);
