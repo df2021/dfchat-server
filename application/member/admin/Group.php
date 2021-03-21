@@ -29,6 +29,7 @@ class Group extends Admin
                 ['icon', '图标','img_url'],
                 ['created_mid', '群主'],
                 ['members', '成员数量'],
+                ['is_recommend', '是否推荐','switch'],
                 ['create_time', '创建时间', 'datetime'],
                 ['update_time', '更新时间', 'datetime'],
                 ['right_button', '操作', 'btn']

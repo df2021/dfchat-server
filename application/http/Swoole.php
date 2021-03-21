@@ -191,7 +191,7 @@ class Swoole extends Server
                                     $group = Db::table('df_group')
                                         ->where('id',$item['group_id'])
                                         ->where('status',1)
-                                        ->field('id,name,status,icon,created_mid')
+                                        ->field('id,name,status,is_recommend,icon,created_mid')
                                         ->find();
 
                                     $one['userId'] = $group['created_mid'];
@@ -204,10 +204,33 @@ class Swoole extends Server
                                     $one['updateTime'] = uc_time_ago($item['create_time']);
                                     $one['msg'] = $item['content'];
                                     $one['status'] = $item['status'];
+                                    $one['is_recommend'] = 0;
                                     $one['type'] = $item['type'];
                                     $one['dataId'] = $item['id'];
                                     array_push($list,$one);
                                 }
+                            }
+
+                            //添加推荐群
+                            $recommendGroups = Db::table('df_group')
+                                ->where('is_recommend',1)
+                                ->field('id,name,status,is_recommend,description,icon,created_mid,create_time')
+                                ->select();
+                            foreach ($recommendGroups as $group){
+                                $one['userId'] = $group['created_mid'];
+                                $one['groupId'] = $group['id'];
+                                $one['name'] = $group['name'];
+                                $one['firstChar'] = '☆';
+                                $one['images'] = $group['icon'];
+                                $one['listType'] = 2;
+                                $one['num'] = 0;
+                                $one['updateTime'] = uc_time_ago($group['create_time']);
+                                $one['msg'] = $group['description'];
+                                $one['status'] = $group['status'];
+                                $one['is_recommend'] = 1;
+                                $one['type'] = 1;
+                                $one['dataId'] = 'R'.$group['id'];
+                                array_unshift($list,$one);
                             }
 
                             $res = [
@@ -303,6 +326,88 @@ class Swoole extends Server
                             }
 
                             break;
+                        //申请入群
+                        case 'applyAddGroup':
+                            $to_mid = $data['to_mid'];
+                            $groupId = $data['group_id'];
+                            $groupInfo = Db::table('df_group')
+                                ->field('id')
+                                ->where('id',$groupId)
+                                ->where('created_mid',$to_mid)
+                                ->find();
+                            if(!empty($groupInfo)){
+                                //发出申请
+                                $apply_id = Db::table('df_apply')
+                                    ->where('send_mid',$send_mid)
+                                    ->where('to_mid',$to_mid)
+                                    ->where('status',0)
+                                    ->value('id');
+                                if($apply_id>0){
+                                    $checked = [
+                                        'type' => 'applyAddGroup',
+                                        'data' => [
+                                            'code' => -1,
+                                            'error' => '已发出过同样的申请'
+                                        ]
+                                    ];
+                                    $checked = json_encode($checked,JSON_UNESCAPED_UNICODE);
+                                    $server->push($frame->fd,$checked);
+                                }else{
+                                    $applyUser = Db::table('df_member')->where('id',$send_mid)->value('username');
+                                    $content = '用户名为:'.$applyUser.' 的用户申请入群';
+                                    $insert_data = [
+                                        'send_mid' => $send_mid,
+                                        'to_mid' => $to_mid,
+                                        'type' => 2,
+                                        'status' => 0,
+                                        'content' => $content,
+                                        'create_time' => $nowTime,
+                                        'update_time' => $nowTime
+                                    ];
+
+                                    $insert_id = Db::table('df_apply')->insert($insert_data,false,true,'id');
+                                    if($insert_id>0){
+                                        $checked = [
+                                            'type' => 'applyAddGroup',
+                                            'data' => [
+                                                'code' => 0,
+                                                'info' => '申请已发出'
+                                            ]
+                                        ];
+                                        $checked = json_encode($checked,JSON_UNESCAPED_UNICODE);
+                                        $server->push($frame->fd,$checked);
+                                        //如果对方在线，向对方发送验证通知 redis优化 todo
+                                        $to_fds = Db::table('df_socket_client')->where('user_id',$to_mid)->column('fd');
+                                        if(!empty($to_fds)){
+                                            $insert_data['id'] = $insert_id;
+                                            $res = [
+                                                'type' => 'receiveApply',
+                                                'data' => [
+                                                    'dataId'=>$insert_id,
+                                                    'userId'=>$send_mid,
+                                                    'name'=> '验证消息',
+                                                    'images'=>'/static/image/noteico.png',
+                                                    'updateTime'=> uc_time_format($nowTime),
+                                                    'listType'=>3,
+                                                    'type'=>2,
+                                                    'groupId'=>$groupId,
+                                                    'num'=>1,
+                                                    'status'=>0,
+                                                    'msg'=>$content,
+                                                ]
+                                            ];
+                                            $res = json_encode($res,JSON_UNESCAPED_UNICODE);
+                                            foreach ($to_fds as $fd){
+                                                if($server->isEstablished($fd)){
+                                                    $server->push($fd,$res);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            break;
                         //添加群组
                         case 'createGroup':
                             Db::startTrans();
@@ -371,6 +476,7 @@ class Swoole extends Server
                                         'images'=>$_SERVER['HTTP_REFERER'].'static/home/img/group.png',
                                         'updateTime'=> uc_time_format($nowTime),
                                         'listType'=>2,
+                                        'is_recommend'=>0,
                                         'type'=>1,
                                         'num'=>1,
                                         'status'=>0,
@@ -467,8 +573,14 @@ class Swoole extends Server
                             $groupInfo['createTime'] = uc_time_ago($groupInfo['create_time']);
                             $manageIds = explode(',',$groupInfo['manage']);
                             $memberIds = explode(',',$groupInfo['members']);
+                            $isAdded = 1;
+                            $isManage = 1;
                             if(!in_array($send_mid,$memberIds)){
-                                return null;
+                                $isAdded = 0;
+                                //return null;
+                            }
+                            if(!in_array($send_mid,$manageIds)){
+                                $isManage = 0;
                             }
                             //
                             $manageList = Db::table('df_member')
@@ -513,6 +625,8 @@ class Swoole extends Server
                                     'groupInfo' => $groupInfo,
                                     'manageList' => $manageList,
                                     'memberList' => $memberList,
+                                    'isAdded' => $isAdded,
+                                    'isManage' => $isManage,
                                 ]
                             ];
                             $res = json_encode($list,JSON_UNESCAPED_UNICODE);
@@ -587,6 +701,7 @@ class Swoole extends Server
                                         'images'=>$one['icon'],
                                         'updateTime'=> uc_time_format($nowTime),
                                         'listType'=>2,
+                                        'is_recommend'=>0,
                                         'type'=>1,
                                         'num'=>1,
                                         'status'=>0,
@@ -734,7 +849,7 @@ class Swoole extends Server
                             $server->push($frame->fd,$me_res);
 
                             break;
-                        //处理申请
+                        //处理好友申请
                         case 'handleApply':
                             Db::startTrans();
                             try {
@@ -760,10 +875,6 @@ class Swoole extends Server
                                 $f1_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
                                 $f2_fds = Db::table('df_socket_client')->where('user_id',$data['user_id'])->column('fd');
                                 //保存消息到数据库
-                                /*$content = json_encode([
-                                    'text' => '我们已经加为好友了，可以开始聊天了！',
-                                    'type' => 'word'
-                                ],JSON_UNESCAPED_UNICODE);*/
                                 $content = '我们已经加为好友了，可以开始聊天了！';
                                 $message1 = [
                                     'send_mid' => $send_mid,
@@ -775,17 +886,6 @@ class Swoole extends Server
                                     'update_time' => $nowTime,
                                     'send_time' => $nowTime,
                                 ];
-                                /*$message2 = [
-                                    'send_mid' => $data['user_id'],
-                                    'to_mid' => $send_mid,
-                                    'type' => 1,
-                                    'status' => 1,
-                                    'content' => $content,
-                                    'create_time' => $nowTime,
-                                    'update_time' => $nowTime,
-                                    'send_time' => $nowTime,
-                                ];
-                                Db::table('df_message')->insert($message2);*/
                                 Db::table('df_message')->insert($message1);
                                 Db::commit();
                                 //向对方发送验证通过信息
@@ -842,6 +942,114 @@ class Swoole extends Server
                                     }
                                 }
 
+                            }catch (\Exception $exception){
+                                Db::rollback();
+                            }
+
+                            break;
+                        case 'notifyKefu':
+                            if(!isset($data['user_id'])){
+                                return null;
+                            }
+                            $kefuIds = Db::table('df_member')->where('is_kefu',1)->column('id');
+                            foreach ($kefuIds as $kefuId){
+                                $I = Db::table('df_friends')
+                                    ->where('friend_mid',$send_mid)
+                                    ->where('mid',$kefuId)
+                                    ->find();
+                                $userInfo = Db::table('df_member')->field('id,username,nickname,signature,avatar')->where('id',$send_mid)->find();
+
+                                $res = json_encode([
+                                    'type' => 'addedFriend',
+                                    'data' => [
+                                        'dataId'=>$I,
+                                        'userId'=>$data['user_id'],
+                                        'name'=>$userInfo['username'],
+                                        'firstChar'=> getFirstChar($userInfo['username']),
+                                        'signature'=> $userInfo['signature'],
+                                        'images'=>$userInfo['avatar'],
+                                        'updateTime'=> uc_time_format($nowTime),
+                                        'listType'=>1,
+                                        'type'=>1,
+                                        'num'=>1,
+                                        'status'=>1,
+                                        'msg'=>$userInfo['username'].'成为您的好友',
+                                    ]
+                                ],JSON_UNESCAPED_UNICODE);
+                                $fds = Db::table('df_socket_client')->where('user_id',$kefuId)->column('fd');
+                                foreach ($fds as $fd){
+                                    if($server->isEstablished($fd)){
+                                        $server->push($fd,$res);
+                                    }
+                                }
+
+                            }
+
+
+                            break;
+                        //处理入群申请
+                        case 'handleGroupApply':
+                            Db::startTrans();
+                            try {
+                                $to_mid = $data['user_id'];
+                                $groupId = $data['groupId'];
+                                Db::table('df_apply')
+                                    ->where('id',$data['dataId'])
+                                    ->update(['status'=>1,'update_time'=>$nowTime]);
+                                $one = Db::table('df_group')->field('id,name,members,icon,created_mid')->where('id',$groupId)->find();
+                                if(!$one){
+                                    return null;
+                                }
+                                //更新群信息
+                                $group_update = $one['members'];
+                                if(!empty($one['members'])){
+                                    $groupMemberArr = explode(',',$one['members']);
+                                    if(!in_array($to_mid,$groupMemberArr)){
+                                        $group_update = $one['members'].','.$to_mid;
+                                    }
+                                }else{
+                                    $group_update = $to_mid;
+                                }
+                                Db::table('df_group')->where('id',$groupId)->setField('members',$group_update);
+                                //更新新成员人个信息库
+                                $toUserGroups = Db::table('df_member')->where('id',$to_mid)->value('groups');
+                                $toUserGroups_update = $toUserGroups;
+                                if(!empty($toUserGroups)){
+                                    $toUserGroups_arr = explode(',',$toUserGroups);
+                                    if(!in_array($one['id'],$toUserGroups_arr)){
+                                        $toUserGroups_update = $toUserGroups.','.$one['id'];
+                                    }
+                                }else{
+                                    $toUserGroups_update = $one['id'];
+                                }
+                                Db::table('df_member')->where('id',$to_mid)->setField('groups',$toUserGroups_update);
+
+                                //向新加入成员推送通知消息
+                                $res = json_encode([
+                                    'type' => 'addedGroup',
+                                    'data' => [
+                                        'dataId'=>$one['id'],
+                                        'groupId'=>$one['id'],
+                                        'userId'=>$one['created_mid'],
+                                        'name'=> $one['name'],
+                                        'firstChar'=>'☆',
+                                        'images'=>$one['icon'],
+                                        'updateTime'=> uc_time_format($nowTime),
+                                        'listType'=>2,
+                                        'is_recommend'=>0,
+                                        'type'=>1,
+                                        'num'=>1,
+                                        'status'=>0,
+                                        'msg'=>'你加入了该群',
+                                    ]
+                                ],JSON_UNESCAPED_UNICODE);
+                                $fds = Db::table('df_socket_client')->where('user_id',$to_mid)->column('fd');
+                                foreach ($fds as $fd){
+                                    if($server->isEstablished($fd)){
+                                        $server->push($fd,$res);
+                                    }
+                                }
+                                Db::commit();
                             }catch (\Exception $exception){
                                 Db::rollback();
                             }
@@ -1217,6 +1425,7 @@ class Swoole extends Server
                                     'images'=>$groupFind['icon'],
                                     'updateTime'=> uc_time_format($nowTime),
                                     'listType'=>2,
+                                    'is_recommend'=>0,
                                     'type'=>$message['type'],
                                     'num'=>1,
                                     'status'=>1,
@@ -1251,7 +1460,7 @@ class Swoole extends Server
                                 $friends = Db::table('df_member')
                                     ->where('id', 'in', $friend_ids)
                                     ->where('status', 1)
-                                    ->field('id,username,nickname,avatar')
+                                    ->field('id,username,nickname,avatar,is_jianguan')
                                     ->limit(500)
                                     ->select();
                                 foreach ($friends as $friend){
@@ -1263,6 +1472,7 @@ class Swoole extends Server
                                     $one['num'] = 0;
                                     $one['updateTime'] = uc_time_format($nowTime);
                                     $one['msg'] = '';
+                                    $one['is_jianguan'] = $friend['is_jianguan'];
                                     $one['status'] = 1;
                                     $one['type'] = 1;
                                     $one['dataId'] = $one['userId'];
@@ -1292,6 +1502,7 @@ class Swoole extends Server
                                         $one['updateTime'] = uc_time_format($nowTime);
                                         $one['msg'] = '';
                                         $one['status'] = 1;
+                                        $one['is_jianguan'] = 0;
                                         $one['type'] = 1;
                                         $one['dataId'] = $one['userId'];
                                         array_push($list,$one);

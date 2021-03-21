@@ -57,11 +57,13 @@ class User extends Index
             'length'      =>    4,
             // 关闭验证码杂点
             'useNoise'    =>    false,
+            // 是否画混淆曲线
+            'useCurve'    =>    false,
             'imageW'    =>    90,
             'imageH'    =>    33,
         ];
         $captcha = new Captcha($config);
-        $captcha->fontttf = '5.ttf';
+        $captcha->fontttf = '4.ttf';
         return $captcha->entry($token);
     }
 

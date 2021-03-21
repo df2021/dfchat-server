@@ -73,7 +73,7 @@ class Index extends Admin
                 $data['avatar'] = \think\facade\Request::domain() .'/uploads/images/weiquan.jpg';
             }
             if(isset($data['is_kefu']) && ($data['is_kefu']==1)){
-                $data['avatar'] = '/static/logo.jpg';
+                $data['avatar'] = '/static/logo.png';
             }
             if ($user = MemberModel::create($data)) {
                 // 记录行为
