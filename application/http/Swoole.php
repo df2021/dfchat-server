@@ -97,6 +97,7 @@ class Swoole extends Server
                                 $one['status'] = $apply['status'];
                                 $one['msg'] = $apply['content'];
                                 $one['type'] = $apply['type'];
+                                $one['groupId'] = $apply['group_id'];
                                 $one['num'] = $apply['status']>0 ? 0 : 1;
                                 $one['dataId'] = $apply['id'];
                                 array_push($list,$one);
@@ -360,6 +361,7 @@ class Swoole extends Server
                                         'to_mid' => $to_mid,
                                         'type' => 2,
                                         'status' => 0,
+                                        'group_id' => $groupId,
                                         'content' => $content,
                                         'create_time' => $nowTime,
                                         'update_time' => $nowTime
@@ -473,7 +475,7 @@ class Swoole extends Server
                                         'userId'=>$send_mid,
                                         'name'=> $data['name'],
                                         'firstChar'=>'☆',
-                                        'images'=>$_SERVER['HTTP_REFERER'].'static/home/img/group.png',
+                                        'images'=> 'http://'.$_SERVER['HTTP_HOST'].'/static/home/img/group.png',
                                         'updateTime'=> uc_time_format($nowTime),
                                         'listType'=>2,
                                         'is_recommend'=>0,

@@ -9,6 +9,7 @@
 
 namespace app\member\model;
 
+use app\admin\model\Attachment;
 use think\Model;
 use think\helper\Hash;
 
@@ -59,10 +60,20 @@ class Member extends Model
         }
         return $str;
     }
-    /*public function getLocationAttr($value,$data)
+    public function getLocationAttr($value,$data)
     {
-        $ip = long2ip($data['last_login_ip']);
-        return ipCity($ip);
+        if(is_numeric($data['last_login_ip'])){
+            $ip = long2ip($data['last_login_ip']);
+            return ipCity($ip);
+        }
+        /*$ip = long2ip($data['last_login_ip']);
+        return ipCity($ip);*/
+    }
+
+    /*public function getAvatarAttr($value)
+    {
+        $file = new Attachment();
+        return $file->getFilePath($value);
     }*/
 
 }

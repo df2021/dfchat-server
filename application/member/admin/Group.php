@@ -5,6 +5,7 @@ namespace app\member\admin;
 
 
 use app\admin\controller\Admin;
+use app\admin\model\Attachment;
 use app\common\builder\ZBuilder;
 use app\member\model\Group as GroupModel;
 use app\member\model\messageGroup;
@@ -36,14 +37,21 @@ class Group extends Admin
             ])
             //->setColumnWidth('last_login_ip', 180)
             ->addRightButton('edit')
-            //->addRightButton('delete')
+            ->addRightButton('delete')
             ->setRowList($data_list)
             ->fetch();
     }
 
     public function message()
     {
-        $data_list = messageGroup::where($this->getMap())
+        $map = $this->getMap();
+        //dump($map);
+        foreach ($map as $k=>$item){
+            if($item[0]=='send_mid'){
+                $map[$k][2] = Db::table('df_member')->where('username|nickname',$item[2])->value('id');
+            }
+        }
+        $data_list = messageGroup::where($map)
             ->order($this->getOrder('id desc'))
             ->paginate();
 
@@ -51,6 +59,9 @@ class Group extends Admin
             ->setPageTitle('聊天记录') // 设置页面标题
             ->setTableName('message_group')
             //->setSearch(['name' => '名称']) // 设置搜索参数
+            ->setSearchArea([
+                ['text', 'send_mid', '发送人'],
+            ])
             ->addColumns([
                 ['id', 'ID'],
                 ['group_id', '所在群'],
@@ -70,12 +81,17 @@ class Group extends Admin
     public function edit($id = null)
     {
         if ($id === null) $this->error('缺少参数');
-
+        $basepath = 'http://'.$_SERVER['HTTP_HOST'];
         // 保存数据
         if ($this->request->isPost()) {
             $data = $this->request->post();
             if(is_array($data['manage'])){
                 $data['manage'] = implode(',',$data['manage']);
+            }
+            //如果更换图片
+            if($data['icon']!=''){
+                $file = new Attachment();
+                $data['icon'] = $basepath.$file->getFilePath($data['icon']);
             }
             if (GroupModel::update($data)) {
                 $this->success('编辑成功', 'index');
@@ -85,6 +101,11 @@ class Group extends Admin
         }
         // 获取数据
         $info = Db::table('df_group')->where('id', $id)->find();
+        //查找附件中的值
+        $attachPath = str_replace($basepath.'/','',$info['icon']);
+        $attachmentId = Db::table('df_admin_attachment')->where('path',$attachPath)->value('id');
+        $info['icon'] = $attachmentId;
+
         $member_arr = explode(',',$info['members']);
         $memberList = [];
         $members = Db::table('df_member')
@@ -99,7 +120,9 @@ class Group extends Admin
             ->setPageTitle('编辑') // 设置页面标题
             ->addFormItems([
                 ['hidden', 'id'],
-                ['static', 'name', '名称'],
+                ['image', 'icon', '群图标'],
+                ['text', 'name', '名称'],
+                ['textarea', 'description', '群描述'],
                 ['select', 'manage', '管理员[:请选择群内成员]','',$memberList, '', 'multiple'],
             ])
             ->setFormData($info) // 设置表单数据
@@ -158,6 +181,8 @@ class Group extends Admin
                 $result = $Model->where($map)->setField($field, 1);
                 break;
             case 'delete': // 删除
+                //删除相关的聊天记录
+                Db::table('df_message_group')->where('group_id','in',$ids)->delete();
                 $result = $Model->where($map)->delete();
                 break;
             case 'soft_delete': // 软删除

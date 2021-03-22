@@ -7,12 +7,21 @@ namespace app\member\admin;
 use app\admin\controller\Admin;
 use app\common\builder\ZBuilder;
 use app\member\model\Message as MessageModel;
+use think\Db;
 
 class Message extends Admin
 {
     public function index()
     {
-        $data_list = MessageModel::where($this->getMap())
+        $map = $this->getMap();
+        //dump($map);
+        foreach ($map as $k=>$item){
+            if($item[0]=='send_mid' || $item[0]=='to_mid'){
+                $map[$k][2] = Db::table('df_member')->where('username|nickname',$item[2])->value('id');
+            }
+        }
+
+        $data_list = MessageModel::where($map)
             ->order($this->getOrder('id desc'))
             ->paginate();
 
@@ -20,6 +29,10 @@ class Message extends Admin
             ->setPageTitle('聊天记录') // 设置页面标题
             ->setTableName('message')
             //->setSearch(['name' => '名称']) // 设置搜索参数
+            ->setSearchArea([
+                ['text', 'send_mid', '发送人'],
+                ['text', 'to_mid', '接收人'],
+            ])
             ->addColumns([
                 ['id', 'ID'],
                 ['send_mid', '发送人'],
