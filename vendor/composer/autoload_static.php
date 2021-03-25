@@ -7,14 +7,18 @@ namespace Composer\Autoload;
 class ComposerStaticInitea24a8d88377c9cd0962665edfe67ce8
 {
     public static $files = array (
+        '9b552a3cc426e3287cc811caefa3cf53' => __DIR__ . '/..' . '/topthink/think-helper/src/helper.php',
+        'cc56288302d9df745d97c934d6a6e5f0' => __DIR__ . '/..' . '/topthink/think-queue/src/common.php',
         '2cffec82183ee1cea088009cef9a6fc3' => __DIR__ . '/..' . '/ezyang/htmlpurifier/library/HTMLPurifier.composer.php',
         '1cfd2761b63b0a29ed23657ea394cb2d' => __DIR__ . '/..' . '/topthink/think-captcha/src/helper.php',
-        '9b552a3cc426e3287cc811caefa3cf53' => __DIR__ . '/..' . '/topthink/think-helper/src/helper.php',
+        'ea51e7f80936725691663347d5b38bd9' => __DIR__ . '/..' . '/topthink/think-swoole/src/command.php',
+        '4489d1ee4bc172af12b5a4ac01e3e47d' => __DIR__ . '/..' . '/topthink/think-swoole/src/checkOptions.php',
     );
 
     public static $prefixLengthsPsr4 = array (
         't' => 
         array (
+            'think\\swoole\\' => 13,
             'think\\helper\\' => 13,
             'think\\composer\\' => 15,
             'think\\captcha\\' => 14,
@@ -24,9 +28,30 @@ class ComposerStaticInitea24a8d88377c9cd0962665edfe67ce8
         array (
             'app\\' => 4,
         ),
+        'X' => 
+        array (
+            'XCron\\' => 6,
+        ),
+        'S' => 
+        array (
+            'SuperClosure\\' => 13,
+        ),
+        'P' => 
+        array (
+            'PhpParser\\' => 10,
+        ),
+        'J' => 
+        array (
+            'Jenssegers\\Agent\\' => 17,
+            'Jaybizzle\\CrawlerDetect\\' => 24,
+        ),
     );
 
     public static $prefixDirsPsr4 = array (
+        'think\\swoole\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/topthink/think-swoole/src',
+        ),
         'think\\helper\\' => 
         array (
             0 => __DIR__ . '/..' . '/topthink/think-helper/src',
@@ -42,10 +67,31 @@ class ComposerStaticInitea24a8d88377c9cd0962665edfe67ce8
         'think\\' => 
         array (
             0 => __DIR__ . '/..' . '/topthink/think-image/src',
+            1 => __DIR__ . '/..' . '/topthink/think-queue/src',
         ),
         'app\\' => 
         array (
             0 => __DIR__ . '/../..' . '/application',
+        ),
+        'XCron\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/xavier/xcron-expression/src/Cron',
+        ),
+        'SuperClosure\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/jeremeamia/superclosure/src',
+        ),
+        'PhpParser\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/nikic/php-parser/lib/PhpParser',
+        ),
+        'Jenssegers\\Agent\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/jenssegers/agent/src',
+        ),
+        'Jaybizzle\\CrawlerDetect\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/jaybizzle/crawler-detect/src',
         ),
     );
 
@@ -57,6 +103,17 @@ class ComposerStaticInitea24a8d88377c9cd0962665edfe67ce8
                 0 => __DIR__ . '/..' . '/ezyang/htmlpurifier/library',
             ),
         ),
+        'D' => 
+        array (
+            'Detection' => 
+            array (
+                0 => __DIR__ . '/..' . '/mobiledetect/mobiledetectlib/namespaced',
+            ),
+        ),
+    );
+
+    public static $classMap = array (
+        'Mobile_Detect' => __DIR__ . '/..' . '/mobiledetect/mobiledetectlib/Mobile_Detect.php',
     );
 
     public static function getInitializer(ClassLoader $loader)
@@ -65,6 +122,7 @@ class ComposerStaticInitea24a8d88377c9cd0962665edfe67ce8
             $loader->prefixLengthsPsr4 = ComposerStaticInitea24a8d88377c9cd0962665edfe67ce8::$prefixLengthsPsr4;
             $loader->prefixDirsPsr4 = ComposerStaticInitea24a8d88377c9cd0962665edfe67ce8::$prefixDirsPsr4;
             $loader->prefixesPsr0 = ComposerStaticInitea24a8d88377c9cd0962665edfe67ce8::$prefixesPsr0;
+            $loader->classMap = ComposerStaticInitea24a8d88377c9cd0962665edfe67ce8::$classMap;
 
         }, null, ClassLoader::class);
     }

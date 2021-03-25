@@ -191,7 +191,7 @@ class User extends Index
                         'send_mid'=>$item['id'],
                         'to_mid'=>$uid,
                         'type'=>1,
-                        'status'=>1,
+                        'status'=>0,
                         'content'=>$welcome,
                         'create_time'=>$time,
                         'update_time'=>$time,

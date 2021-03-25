@@ -20,21 +20,26 @@ class Group extends Admin
             ->order($this->getOrder('id desc'))
             ->paginate();
 
+        $columns = [
+            ['id', 'ID'],
+            ['name', '名称'],
+            ['icon', '图标','img_url'],
+            ['created_mid', '群主'],
+            ['members', '成员数量'],
+        ];
+        $auth = model('user/role')->roleAuth();
+        $role = session('user_auth.role');
+        if(in_array('member/group/quickedit',$auth) || $role==1){
+            $columns[] = ['is_recommend', '是否推荐','switch'];
+        }
+        $columns[] = ['create_time', '创建时间', 'datetime'];
+        $columns[] = ['update_time', '更新时间', 'datetime'];
+        $columns[] = ['right_button', '操作', 'btn'];
         return ZBuilder::make('table')
             ->setPageTitle('群组管理') // 设置页面标题
             ->setTableName('group')
             ->setSearch(['name' => '名称']) // 设置搜索参数
-            ->addColumns([
-                ['id', 'ID'],
-                ['name', '名称'],
-                ['icon', '图标','img_url'],
-                ['created_mid', '群主'],
-                ['members', '成员数量'],
-                ['is_recommend', '是否推荐','switch'],
-                ['create_time', '创建时间', 'datetime'],
-                ['update_time', '更新时间', 'datetime'],
-                ['right_button', '操作', 'btn']
-            ])
+            ->addColumns($columns)
             //->setColumnWidth('last_login_ip', 180)
             ->addRightButton('edit')
             ->addRightButton('delete')
@@ -67,7 +72,8 @@ class Group extends Admin
                 ['group_id', '所在群'],
                 ['send_mid', '发送人'],
                 ['type','类型', [1 =>'文本',2 => '语音',3 => '图片',5=>'视频']],
-                ['content', '内容'],
+                //['content', '内容'],
+                ['content', '内容','link',url('content',['id'=>'__id__']), '_blank','pop', '内容'],
                 ['create_time', '发送时间', 'datetime'],
                 ['right_button', '操作', 'btn']
             ])
@@ -76,6 +82,26 @@ class Group extends Admin
             ->addRightButton('delete')
             ->setRowList($data_list)
             ->fetch();
+    }
+
+    public function content()
+    {
+        $params = $this->request->param();
+        $id = $params['id'];
+        $one = Db::table('df_message_group')->where('id',$id)->field('id,type,content')->find();
+        if(!empty($one)){
+            if($one['type']==3){
+                $content = json_decode($one['content'],true);
+                $src = $content['url'];
+                return '<img src="'.$src.'">';
+            }elseif($one['type']==1){
+                echo $one['content'];
+            }elseif($one['type']==2){
+                echo '[语音]';
+            }elseif($one['type']==5){
+                echo '[视频]';
+            }
+        }
     }
 
     public function edit($id = null)

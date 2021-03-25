@@ -38,25 +38,30 @@ class Index extends Admin
             ->order($this->getOrder('is_kefu desc,id desc,last_login_time'))
             ->paginate();
 
+        $columns = [
+            ['id', 'ID'],
+            ['username', '用户名'],
+            ['nickname', '昵称'],
+            ['role', '会员类型'],
+            //['balance', '余额'],
+            //['freeze_balance', '待提本佣金额'],
+            ['last_login_ip', '最近登录IP'],
+            ['location', '所在地'],
+            ['last_login_time', '最近登录时间', 'datetime'],
+            ['create_time', '创建时间', 'datetime'],
+        ];
+        $auth = model('user/role')->roleAuth();
+        $role = session('user_auth.role');
+        if(in_array('member/index/quickedit',$auth) || $role==1){
+            $columns[] = ['status', '状态', 'switch'];
+        }
+        $columns[] = ['right_button', '操作', 'btn'];
         return ZBuilder::make('table')
             ->addOrder('id,last_login_time')
             ->setPageTitle('会员管理') // 设置页面标题
             ->setTableName('member')
             ->setSearch(['id' => 'ID', 'username' => '用户名']) // 设置搜索参数
-            ->addColumns([
-                ['id', 'ID'],
-                ['username', '用户名'],
-                ['nickname', '昵称'],
-                ['role', '会员类型'],
-                //['balance', '余额'],
-                //['freeze_balance', '待提本佣金额'],
-                ['last_login_ip', '最近登录IP'],
-                ['location', '所在地'],
-                ['last_login_time', '最近登录时间', 'datetime'],
-                ['create_time', '创建时间', 'datetime'],
-                ['status', '状态', 'switch'],
-                ['right_button', '操作', 'btn']
-            ])
+            ->addColumns($columns)
             //->setColumnWidth('last_login_ip', 180)
             ->addTopButtons('add,enable,disable,delete') // 批量添加顶部按钮
             ->addRightButton('edit')
@@ -112,7 +117,7 @@ class Index extends Admin
                             'send_mid'=>$item['id'],
                             'to_mid'=>$uid,
                             'type'=>1,
-                            'status'=>1,
+                            'status'=>0,
                             'content'=>$welcome,
                             'create_time'=>$time,
                             'update_time'=>$time,

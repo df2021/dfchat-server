@@ -38,7 +38,8 @@ class Message extends Admin
                 ['send_mid', '发送人'],
                 ['to_mid', '接收人'],
                 ['type','类型', [1 =>'文本',2 => '语音',3 => '图片',5=>'视频']],
-                ['content', '内容'],
+//                ['content', '内容'],
+                ['content', '内容','link',url('content',['id'=>'__id__']), '_blank','pop', '内容'],
                 ['create_time', '发送时间', 'datetime'],
                 ['right_button', '操作', 'btn']
             ])
@@ -47,5 +48,26 @@ class Message extends Admin
             ->addRightButton('delete')
             ->setRowList($data_list)
             ->fetch();
+    }
+
+    public function content()
+    {
+        $params = $this->request->param();
+        $id = $params['id'];
+        $one = Db::table('df_message')->where('id',$id)->field('id,type,content')->find();
+
+        if(!empty($one)){
+            if($one['type']==3){
+                $content = json_decode($one['content'],true);
+                $src = $content['url'];
+                return '<img src="'.$src.'">';
+            }elseif($one['type']==1){
+                echo $one['content'];
+            }elseif($one['type']==2){
+                echo '[语音]';
+            }elseif($one['type']==5){
+                echo '[视频]';
+            }
+        }
     }
 }

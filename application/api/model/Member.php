@@ -4,6 +4,8 @@
 namespace app\api\model;
 
 
+use Jenssegers\Agent\Agent;
+use think\Db;
 use think\helper\Hash;
 use think\Model;
 
@@ -63,9 +65,30 @@ class Member extends Model
             } else {
                 //$uid = $user['id'];
                 // 更新登录信息
-                $user['last_login_time'] = request()->time();
+                $time = request()->time();
+                $user['last_login_time'] = $time;
                 $user['last_login_ip']   = request()->ip(1);
                 if ($user->save()) {
+                    //记录登录日志
+                    $realIp = get_client_ip(0,true);
+                    $agent = new Agent();
+                    // 获取浏览器版本
+                    $browser = $agent->browser();
+                    $version = $agent->version($browser);
+
+                    $log_data = [
+                        'mid'=>$user['id'],
+                        'username'=>$user['username'],
+                        'login_time'=>$time,
+                        'real_ip'=>$realIp,
+                        'local_address'=>ipCity($realIp),
+                        'op_system'=>$agent->isMobile() ? '手机' : 'PC',
+                        'is_robot'=>(int)$agent->isRobot(),
+                        'device_info'=>$agent->device(),
+                        'system_info'=>$agent->platform(),
+                        'browser_info'=>$browser.'-'.$version,
+                    ];
+                    Db::table('df_member_login_log')->insert($log_data);
                     // 自动登录
                     return $user;
                 } else {
