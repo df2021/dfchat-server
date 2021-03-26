@@ -71,26 +71,6 @@ class Index extends Admin
             ->fetch();
     }
 
-    public function autoAddFriend($uid,$friendUid){
-        $time = time();
-        //Db::startTrans();
-        Db::table('df_friends')->insertAll([
-            ['status'=>1, 'mid'=>$uid,'friend_mid'=>$friendUid,'create_time'=>$time,'update_time'=>$time],
-            ['status'=>1, 'mid'=>$friendUid,'friend_mid'=>$uid,'create_time'=>$time,'update_time'=>$time],
-        ],true);
-        Db::table('df_message')->insert([
-            'send_mid'=>$friendUid,
-            'to_mid'=>$uid,
-            'type'=>1,
-            'status'=>1,
-            'content'=>'我们已经成为好友了，可以开始聊天了！',
-            'create_time'=>$time,
-            'update_time'=>$time,
-            'send_time'=>$time,
-        ]);
-        //Db::commit();
-    }
-
     public function add()
     {
         // 保存数据
@@ -124,7 +104,7 @@ class Index extends Admin
                             'send_time'=>$time,
                         ]);
                     }
-                    $this->autoAddFriend($uid,$item['id']);
+                    autoAddFriend($uid,$item['id']);
                 }
                 Db::commit();
                 // 记录行为

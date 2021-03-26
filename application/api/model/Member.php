@@ -90,6 +90,9 @@ class Member extends Model
                     ];
                     Db::table('df_member_login_log')->insert($log_data);
                     // 自动登录
+                    if(isset($user['password'])){
+                        unset($user['password']);
+                    }
                     return $user;
                 } else {
                     // 更新登录信息失败

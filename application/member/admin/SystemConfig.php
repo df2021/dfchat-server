@@ -37,6 +37,7 @@ class SystemConfig extends Admin
 //                ['textarea', 'user_agreement', '用户协议'],
 //                ['textarea', 'privacy_policy', '隐私条款'],
                 ['textarea', 'welcome', '问候语'],
+                ['textarea', 'open_remark', '客服开场白'],
             ])
             ->setFormData($info) // 设置表单数据
             ->fetch();

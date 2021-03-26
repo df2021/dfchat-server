@@ -69,20 +69,20 @@
         <form class="layui-form zyl_pad_01" action="">
             <div class="layui-col-sm12 layui-col-md12">
                 <div class="layui-form-item">
-                    <input type="text" name="userName" lay-verify="required|userName" autocomplete="off" placeholder="账号" class="layui-input">
+                    <input type="text" name="username" lay-verify="required|username" autocomplete="off" placeholder="账号" class="layui-input">
                     <i class="layui-icon layui-icon-username zyl_lofo_icon"></i>
                 </div>
             </div>
             <div class="layui-col-sm12 layui-col-md12">
                 <div class="layui-form-item">
-                    <input type="password" name="nuse" lay-verify="required|pass" autocomplete="off" placeholder="密码" class="layui-input">
+                    <input type="password" name="password" lay-verify="required|pass" autocomplete="off" placeholder="密码" class="layui-input">
                     <i class="layui-icon layui-icon-password zyl_lofo_icon"></i>
                 </div>
             </div>
             <div class="layui-col-sm12 layui-col-md12">
                 <div class="layui-form-item" pane="">
                     <div class="layui-input-block" style="margin-left: 0">
-                        <input type="checkbox" name="like1[write]" lay-skin="primary" title="我已经阅读并同意《用户协议》 及 《隐私条款》" checked="">
+                        <input type="checkbox" name="agreeDoc" lay-skin="primary" title="我已经阅读并同意《用户协议》 及 《隐私条款》" checked="">
 <!--                        <span>我已经阅读并同意《用户协议》 及 《隐私条款》</span>-->
                     </div>
                 </div>
@@ -101,6 +101,9 @@
             <div class="layui-col-sm12 layui-col-md12">
                 <button class="layui-btn layui-btn-fluid" lay-submit="" lay-filter="demo1">立即登录</button>
             </div>
+            <!--<div class="layui-col-sm12 layui-col-md12">
+                <a href="#">注册</a>
+            </div>-->
         </form>
     </div>
 </div>
@@ -122,29 +125,50 @@
 
         //自定义验证规则
         form.verify({
-            userName: function(value){
+            username: function(value){
                 if(value.length < 5){
                     return '账号至少得5个字符';
                 }
             }
             ,pass: [/^[\S]{6,12}$/,'密码必须6到12位，且不能出现空格']
-            ,vercodes: function(value){
+            /*,vercodes: function(value){
                 //获取验证码
                 var zylVerCode = $(".zylVerCode").html();
                 if(value!=zylVerCode){
                     return '验证码错误（区分大小写）';
                 }
-            }
-            ,content: function(value){
+            }*/
+           /* ,content: function(value){
                 layedit.sync(editIndex);
-            }
+            }*/
         });
 
         //监听提交
         form.on('submit(demo1)', function(data){
-            layer.alert(JSON.stringify(data.field),{
+            // var jsonParam = JSON.stringify(data.field)
+            console.log(data.field.agreeDoc)
+            if(data.field.agreeDoc==undefined || data.field.agreeDoc!='on'){
+                layer.alert("请阅读《用户协议》及《隐私条款》");
+                return false;
+            }
+            /*layer.alert(JSON.stringify(data.field),{
                 title: '最终的提交信息'
-            })
+            })*/
+            //异步请求
+            var index_load = layer.load(1, {time: 30*1000});//30秒超时
+            $.post('/api/user/login',data.field,function (res){
+                layer.close(index_load);
+                if(res.code!=0){
+                    layer.msg(res.error);
+                }else{
+                    //存储token、用户信息
+                    sessionStorage.setItem('access_token', res.token);
+                    sessionStorage.setItem('userInfo', JSON.stringify(res.data));
+                    //跳转到首页
+                    window.location.href = "/index/index/index";
+                }
+                console.log(res);
+            });
             return false;
         });
 

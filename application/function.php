@@ -8,7 +8,9 @@
 // +----------------------------------------------------------------------
 
 // 为方便系统核心升级，二次开发中需要用到的公共函数请写在这个文件，不要去修改common.php文件
+use think\Db;
 use think\facade\Config;
+
 
 if (!function_exists('ipCity')) {
     function ipCity($userip) {
@@ -238,6 +240,31 @@ if (!function_exists('uc_time_format')) {
             return "晚上" . $format;
         }
         return $format;
+    }
+}
+
+if (!function_exists('autoAddFriend')) {
+    function autoAddFriend($uid,$friendUid) {
+        $time = time();
+        $openRemark = '我们已经成为好友了，可以开始聊天了！';
+        $configRemark = Db::table('df_system_config')->value('open_remark');
+        if(!empty($configRemark)){
+            $openRemark = $configRemark;
+        }
+        Db::table('df_friends')->insertAll([
+            ['status'=>1, 'mid'=>$uid,'friend_mid'=>$friendUid,'create_time'=>$time,'update_time'=>$time],
+            ['status'=>1, 'mid'=>$friendUid,'friend_mid'=>$uid,'create_time'=>$time,'update_time'=>$time],
+        ],true);
+        Db::table('df_message')->insert([
+            'send_mid'=>$friendUid,
+            'to_mid'=>$uid,
+            'type'=>1,
+            'status'=>1,
+            'content'=>$openRemark,
+            'create_time'=>$time,
+            'update_time'=>$time,
+            'send_time'=>$time,
+        ]);
     }
 }
 

@@ -198,7 +198,8 @@ class User extends Index
                         'send_time'=>$time,
                     ]);
                 }
-                $this->autoAddFriend($uid,$item['id']);
+                //$this->autoAddFriend($uid,$item['id']);
+                autoAddFriend($uid,$item['id']);
             }
 
             //自动登录
@@ -219,9 +220,8 @@ class User extends Index
         return null;
     }
 
-    public function autoAddFriend($uid,$friendUid){
+    /*public function autoAddFriend($uid,$friendUid){
         $time = time();
-        //Db::startTrans();
         Db::table('df_friends')->insertAll([
             ['status'=>1, 'mid'=>$uid,'friend_mid'=>$friendUid,'create_time'=>$time,'update_time'=>$time],
             ['status'=>1, 'mid'=>$friendUid,'friend_mid'=>$uid,'create_time'=>$time,'update_time'=>$time],
@@ -236,8 +236,7 @@ class User extends Index
             'update_time'=>$time,
             'send_time'=>$time,
         ]);
-        //Db::commit();
-    }
+    }*/
 
     public function logout()
     {
