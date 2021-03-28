@@ -21,6 +21,9 @@
     }
     console.log(accessToken);
     console.log(userInfo);
+    let ws_host = location.host;
+    let ws = new WebSocket("ws://"+ws_host+":9502");
+
     function logout(){
         layer.alert('是否退出登录?', function(index){
             //do something
@@ -32,48 +35,6 @@
 
         });
     }
-    let ws_host = location.host
-    let ws = new WebSocket("ws://"+ws_host+":9502");
-    ws.onopen = function(evt) {
-        console.log("Connection open ...");
-        //绑定
-        let bindStr = {
-            user_id:userInfo.id,
-            type:1,
-            action:"connected",
-            access_token:accessToken
-        }
-        bindStr = JSON.stringify(bindStr);
-        ws.send(bindStr);
-    };
-    ws.onmessage = function(evt) {
-        // console.log( "Received Message: " + evt.data);
-        let response = JSON.parse(evt.data)
-        console.log( response);
-        switch (response.type) {
-            case 'connect':
-                console.log('绑定到服务器：' + response.data)
-                //获取聊天列表
-                let pullList = {
-                    user_id:userInfo.id,
-                    action:"pullList",
-                    access_token:accessToken
-                }
-                pullList = JSON.stringify(pullList);
-                ws.send(pullList);
-                break;
-            case "pullList":
-                console.log(response)
-                break;
-            default:
-                break;
-        }
-
-    };
-    ws.onclose = function(evt) {
-        console.log("Connection closed.");
-        location.reload();
-    };
 </script>
 <blockquote class="layui-elem-quote">
     PC端Web聊天-【加速开发中...】
@@ -134,9 +95,23 @@
         //基础配置
         layim.config({
             //初始化接口
-            init: {
+            /*init: {
                 url: '/layim/pro/demo/json/getList.json'
                 ,data: {}
+            }*/
+            init: {
+                url: '/api/chat/getList'
+                ,data: {
+                    mine:{
+                        avatar:userInfo.avatar
+                        ,id:userInfo.id
+                        ,sign:userInfo.signature
+                        ,status:'online'
+                        ,username: userInfo.nickname!='' ? userInfo.nickname : userInfo.username
+                    },
+                    action:"pullList",
+                    access_token:accessToken
+                }
             }
             //查看群员接口
             ,members: {
@@ -181,6 +156,7 @@
             //,chatLog: layui.cache.layimAssetsPath + 'html/chatlog.html' //聊天记录页面地址，若不开启，剔除该项即可
 
         });
+
         //监听在线状态的切换事件
         layim.on('online', function(status){
             layer.msg(status);
@@ -242,7 +218,7 @@
         });
         //监听查看群员
         layim.on('members', function(data){
-            //console.log(data);
+
         });
 
         //监听聊天窗口的切换
@@ -262,7 +238,6 @@
                 });
             }
         });
-
 
         //面板外的操作
         var $ = layui.jquery, active = {
@@ -355,7 +330,8 @@
                 });
             }
             ,addqun: function(){
-                layim.add({                    type: 'group'
+                layim.add({
+                    type: 'group'
                     ,username: '测试群组1'
                     ,avatar: '/chat/images/default.png'
                     ,submit: function(group, remark, index){
@@ -469,6 +445,100 @@
 
 
 </script>
+<script src="/static/admin/js/core/jquery.min.js" charset="utf-8"></script>
+<script>
 
+    let chatList = {
+        code:0
+        ,data:{
+            friend:[]
+            ,group:[]
+            ,mine:{
+                avatar:userInfo.avatar
+                ,id:userInfo.id
+                ,sign:userInfo.signature
+                ,status:'online'
+                ,username: userInfo.nickname!='' ? userInfo.nickname : userInfo.username
+            }
+        }
+    };
+    ws.onopen = function(evt) {
+        console.log("Connection open ...");
+        //绑定
+        let bindStr = {
+            user_id:userInfo.id,
+            type:1,
+            action:"connected",
+            access_token:accessToken
+        }
+        bindStr = JSON.stringify(bindStr);
+        ws.send(bindStr);
+    };
+    ws.onmessage = function(evt) {
+        // console.log( "Received Message: " + evt.data);
+        let response = JSON.parse(evt.data)
+        console.log( response);
+        switch (response.type) {
+            case 'connect':
+                console.log('绑定到服务器：' + response.data)
+                //获取聊天列表
+                /*let pullList = {
+                    user_id:userInfo.id,
+                    action:"pullList",
+                    access_token:accessToken
+                }
+                pullList = JSON.stringify(pullList);
+                ws.send(pullList);*/
+                break;
+            /*case "pullList":
+                //获取通讯录
+                let addressBookStr = {
+                    user_id:userInfo.id,
+                    action:"getAddressBook",
+                    access_token:accessToken
+                }
+                addressBookStr = JSON.stringify(addressBookStr);
+                ws.send(addressBookStr);
+                //====================
+                let chatList = response.data;
+                // let chatListEleTpl = '<li layim-event="chat" data-type="history" data-index="friend666666" class="layim-friend666666 "><img src="/layim/pro/dist/layim-assets/images/default.png"><span>测试5</span><p>测试内容5</p><span class="layim-msg-status">new</span></li>';
+                let tpl = '';
+                let len = chatList.length;
+                if(len>0){
+                    for(let i=0; i<len;i++){
+                        tpl += '<li layim-event="chat" data-type="history" data-index="friend"'+chatList[i].userId+' ' +
+                            'class="layim-friend'+chatList[i].userId+' "><img src="'+chatList[i].images+'"><span>'+chatList[i].name+'</span><p>'+chatList[i].msg+'</p><span class="layim-msg-status">new</span></li>';
+                    }
+                }
+                $('.layim-list-history').html(tpl);
+
+                break;*/
+            /*case "getAddressBook":
+                let AddressBook = response.data;
+                let AddressBookLen = AddressBook.length;
+                let addressBookTpl = '';
+                // let groupTpl = '<li layim-event="chat" data-type="group" data-index="0" class="layim-group101 "><img src="/layim/pro/dist/layim-assets/images/default.png"><span>测试群组一</span><p></p><span class="layim-msg-status">new</span></li>';
+                let groupTpl = '';
+                for (let i=0;i<AddressBookLen;i++){
+                    if(AddressBook[i].listType==1){
+                        addressBookTpl += '<li layim-event="chat" data-type="friend" data-index="'+i+'" class="layim-friend'+AddressBook[i].userId+'"><img src="'+AddressBook[i].images+'"><span>'+AddressBook[i].name+'</span><p></p><span class="layim-msg-status">new</span></li>';
+                    }else if(AddressBook[i].listType==2){
+                        groupTpl += '<li layim-event="chat" data-type="group" data-index="'+i+'" class="layim-group'+AddressBook[i].groupId+' "><img src="'+AddressBook[i].images+'"><span>'+AddressBook[i].name+'</span><p></p><span class="layim-msg-status">new</span></li>';
+                    }
+                }
+                $('.layim-list-friend li').html('<ul class="layui-layim-list layui-show">'+addressBookTpl+'</ul>');
+                //群组
+                $('.layim-list-group').html(groupTpl);
+                break;*/
+            default:
+                break;
+        }
+
+    };
+    ws.onclose = function(evt) {
+        console.log("Connection closed.");
+        location.reload();
+    };
+</script>
 </body>
 </html>

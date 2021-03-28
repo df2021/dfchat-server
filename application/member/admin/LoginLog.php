@@ -13,9 +13,15 @@ class LoginLog extends Admin
 {
     public function index()
     {
-        $where = $this->getMap();
-
-        $data_list = Db::table('df_member_login_log')->where($where)
+        $map = $this->getMap();
+        //dump($map);
+        foreach ($map as $k=>$item){
+            if($item[0]=='username'){
+                $map[$k][2] = Db::table('df_member')->where('username|nickname',$item[2])->value('username');
+            }
+        }
+        //dump($map);
+        $data_list = Db::table('df_member_login_log')->where($map)
             ->order($this->getOrder('login_time desc'))
             ->paginate();
 
@@ -23,7 +29,11 @@ class LoginLog extends Admin
             ->addOrder('id,last_login_time')
             ->setPageTitle('会员登录日志') // 设置页面标题
             ->setTableName('member_login_log')
-            ->setSearch(['username' => '用户名','real_ip'=>'真实IP']) // 设置搜索参数
+            //->setSearch(['username' => '用户名','real_ip'=>'真实IP']) // 设置搜索参数
+            ->setSearchArea([
+                ['text', 'username', '用户名/昵称'],
+                ['text', 'real_ip', '真实IP'],
+            ])
             ->hideCheckbox()
             ->addColumns([
                 //['id', 'ID'],

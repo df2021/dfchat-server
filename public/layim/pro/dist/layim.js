@@ -184,8 +184,8 @@ layui.define(["layer", "laytpl", "upload"],
               }).replace(i(), "<$1 $2>").replace(i("/"), "</$1>").replace(/\n/g, "<br>")
          };
      var x, b, w, k, C, A = function(a, i, n) {
-          return a = a || {},
-              e.ajax({
+          return a = a || {}
+              ,e.ajax({
                url: a.url,
                type: a.type || "get",
                data: a.data,

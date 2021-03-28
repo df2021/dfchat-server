@@ -10,7 +10,7 @@
   ,"avatar": ""
   }
 ,"friend": [{
-    "groupname": "测试分组一"
+    "groupname": "通讯录列表"
   ,"id": 0
   ,"list": [{
       "username": "测试1"
@@ -38,11 +38,7 @@
     ,"id": "666666"
     ,"avatar": ""
     ,"sign": "测试内容5"
-    }]
-  },{
-    "groupname": "测试分组二"
-  ,"id": 1
-  ,"list": [{
+    },{
       "username": "测试6"
     ,"id": "121286"
     ,"avatar": ""
@@ -67,11 +63,7 @@
     ,"id": "3435343"
     ,"avatar": ""
     ,"sign": ""
-    }]
-  },{
-    "groupname": "测试分组三"
-  ,"id": 2
-  ,"list": [{
+    },{
       "username": "测试11"
     ,"id": "76543"
     ,"avatar": ""

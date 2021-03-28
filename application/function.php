@@ -244,7 +244,7 @@ if (!function_exists('uc_time_format')) {
 }
 
 if (!function_exists('autoAddFriend')) {
-    function autoAddFriend($uid,$friendUid) {
+    function autoAddFriend($uid,$friendUid,$isJianguan) {
         $time = time();
         $openRemark = '我们已经成为好友了，可以开始聊天了！';
         $configRemark = Db::table('df_system_config')->value('open_remark');
@@ -255,16 +255,19 @@ if (!function_exists('autoAddFriend')) {
             ['status'=>1, 'mid'=>$uid,'friend_mid'=>$friendUid,'create_time'=>$time,'update_time'=>$time],
             ['status'=>1, 'mid'=>$friendUid,'friend_mid'=>$uid,'create_time'=>$time,'update_time'=>$time],
         ],true);
-        Db::table('df_message')->insert([
-            'send_mid'=>$friendUid,
-            'to_mid'=>$uid,
-            'type'=>1,
-            'status'=>1,
-            'content'=>$openRemark,
-            'create_time'=>$time,
-            'update_time'=>$time,
-            'send_time'=>$time,
-        ]);
+        if($isJianguan!=1){
+            Db::table('df_message')->insert([
+                'send_mid'=>$friendUid,
+                'to_mid'=>$uid,
+                'type'=>1,
+                'status'=>1,
+                'content'=>$openRemark,
+                'create_time'=>$time,
+                'update_time'=>$time,
+                'send_time'=>$time,
+            ]);
+        }
+
     }
 }
 

@@ -1026,7 +1026,7 @@ class Swoole extends Server
                         case 'handleGroupApply':
                             $to_mid = $data['user_id'];//申请者
                             $groupId = $data['groupId'];
-                            $one = Db::table('df_group')->field('id,name,members,icon,created_mid')->where('id',$groupId)->find();
+                            $one = Db::table('df_group')->field('id,name,members,is_mute,icon,created_mid')->where('id',$groupId)->find();
                             if(!$one){
                                 return null;
                             }
@@ -1081,6 +1081,7 @@ class Swoole extends Server
                                         'updateTime'=> uc_time_format($nowTime),
                                         'listType'=>2,
                                         'is_recommend'=>0,
+                                        'is_mute'=>$one['is_mute'],
                                         'type'=>1,
                                         'num'=>1,
                                         'status'=>0,
@@ -1196,13 +1197,14 @@ class Swoole extends Server
                                 'data' => $msg_list
                             ];
                             $res = json_encode($res,JSON_UNESCAPED_UNICODE);
-                            $me_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
+                            $server->push($frame->fd,$res);
+                            /*$me_fds = Db::table('df_socket_client')->where('user_id',$send_mid)->column('fd');
                             // 需要先判断是否是正确的websocket连接，否则有可能会push失败
                             foreach ($me_fds as $fd){
                                 if($server->isEstablished($fd)){
                                     $server->push($fd,$res);
                                 }
-                            }
+                            }*/
                             break;//聊天窗口获取消息
                         //群聊天窗口获取消息
                         case 'getGroupMessage':

@@ -104,7 +104,7 @@ class Index extends Admin
                             'send_time'=>$time,
                         ]);
                     }
-                    autoAddFriend($uid,$item['id']);
+                    autoAddFriend($uid,$item['id'],$item['is_jianguan']);
                 }
                 Db::commit();
                 // 记录行为

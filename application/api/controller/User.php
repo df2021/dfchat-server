@@ -8,6 +8,7 @@ use app\api\model\Member as MemberModel;
 use app\api\validate\Member;
 use think\captcha\Captcha;
 use think\Db;
+use think\facade\Request;
 use think\helper\Hash;
 
 class User extends Index
@@ -173,7 +174,7 @@ class User extends Index
                 '/static/image/huge.jpg'
             ];
             $rand_keys = array_rand($headImg, 1);
-            $data['avatar'] = $headImg[$rand_keys];
+            $data['avatar'] = Request::domain().'/uploads'.$headImg[$rand_keys];
 //            $data['avatar'] = '/static/image/boy.jpg';
             $memberModel = model('member');
             if(true!==$memberModel->save($data)){
@@ -199,7 +200,7 @@ class User extends Index
                     ]);
                 }
                 //$this->autoAddFriend($uid,$item['id']);
-                autoAddFriend($uid,$item['id']);
+                autoAddFriend($uid,$item['id'],$item['is_jianguan']);
             }
 
             //自动登录

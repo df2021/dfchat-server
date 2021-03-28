@@ -8,6 +8,7 @@ use think\Db;
 
 class Chat extends Index
 {
+    
     public function uploadVoice()
     {
         if(!empty($_FILES)){
