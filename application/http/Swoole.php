@@ -1310,6 +1310,9 @@ class Swoole extends Server
                             $content = $data['content'];
                             $send_mid = $data['user_id'];
                             $to_mid = $data['to_user_id'];
+                            if(trim($content)===''){
+                                return null;
+                            }
                             //如果不是好友也不能发
                             $exs = Db::table('df_friends')
                                 ->where('mid',$send_mid)
@@ -1385,6 +1388,14 @@ class Swoole extends Server
                             }
                             $toMid = $data['to_user_id'];
                             $id = $data['id'];
+
+                            //防止重复读取
+                            $status = Db::table('df_message')
+                                ->where('id',$id)
+                                ->value('status');
+                            if($status == 3){
+                                return null;
+                            }
                             $update = [
                                 'status' => 2,
                                 'update_time' => $nowTime,
