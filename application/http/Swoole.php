@@ -1557,6 +1557,7 @@ class Swoole extends Server
                             }
                             //群
                             $group_ids = Db::table('df_member')->where('id',$send_mid)->value('groups');
+                            $sortChar = [];
                             if(!empty($group_ids)){
                                 $group_ids = explode(',',$group_ids);
                                 $groups = Db::table('df_group')
@@ -1585,6 +1586,11 @@ class Swoole extends Server
 
                                 }
                             }
+                            //对$list排序
+                            foreach ($list as $li){
+                                $sortChar[] = $li['firstChar'];
+                            }
+                            array_multisort($sortChar,SORT_STRING,$list);
                             $res = [
                                 'type'=>'getAddressBook',
                                 'data'=>$list
