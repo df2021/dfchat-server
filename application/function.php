@@ -16,7 +16,7 @@ if (!function_exists('ipCity')) {
     function ipCity($userip) {
         //return $userip;
         //IP数据库路径，这里用的是QQ IP数据库 20110405 纯真版
-        $dat_path = '/www/wwwroot/df/extend/lib/QQWry.Dat';
+        $dat_path = $_SERVER['DOCUMENT_ROOT'].'/../extend/lib/QQWry.Dat';
         //$URLpath="http://".$_SERVER['HTTP_HOST'];
         //$dat_path =$URLpath."/source/plugin/QQWry.dat";
         //判断IP地址是否有效
@@ -273,7 +273,6 @@ if (!function_exists('autoAddFriend')) {
 
 if (!function_exists('getFirstChar')) {
     function getFirstChar($s0) {
-//        return '☆';
         $fchar = ord(substr($s0, 0, 1));
         if (($fchar >= ord("a") and $fchar <= ord("z"))or($fchar >= ord("A") and $fchar <= ord("Z"))) return strtoupper(chr($fchar));
 //        $s = iconv("UTF-8", "GBK", $s0);
@@ -281,6 +280,9 @@ if (!function_exists('getFirstChar')) {
         $s = mb_convert_encoding($s0, "UTF-8", "GBK,GB2312,GB18030");
         /*$useripaddr = iconv ( "GBK", "UTF-8", $useripaddr );
         $useripaddr = mb_convert_encoding($useripaddr, "UTF-8", "GBK,GB2312,GB18030");*/
+        if(!isset($s{0}) || !isset($s{1})){
+            return '☆';
+        }
         $asc = ord($s{0}) * 256 + ord($s{1})-65536;
         if ($asc >= -20319 and $asc <= -20284)return "A";
         if ($asc >= -20283 and $asc <= -19776)return "B";

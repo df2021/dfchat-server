@@ -1454,6 +1454,17 @@ class Swoole extends Server
                                 return '未获取到参数group_id';
                             }
                             $content = $data['content'];
+                            //检测禁用关键词
+                            $keywords = Db::table('df_keywords_mask')->value('keywords');
+                            if(!empty($keywords)){
+                                $keywords = explode(',',$keywords);
+                                foreach ($keywords as $keyword){
+                                    if(strpos($content,$keyword)!==false){
+                                        return '发现禁用关键词';
+                                    }
+                                }
+                            }
+
                             //$send_mid = $data['user_id'];
                             $group_id = $data['group_id'];
 
