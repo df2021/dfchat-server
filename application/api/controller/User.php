@@ -221,26 +221,21 @@ class User extends Index
         return null;
     }
 
-    /*public function autoAddFriend($uid,$friendUid){
-        $time = time();
-        Db::table('df_friends')->insertAll([
-            ['status'=>1, 'mid'=>$uid,'friend_mid'=>$friendUid,'create_time'=>$time,'update_time'=>$time],
-            ['status'=>1, 'mid'=>$friendUid,'friend_mid'=>$uid,'create_time'=>$time,'update_time'=>$time],
-        ],true);
-        Db::table('df_message')->insert([
-            'send_mid'=>$friendUid,
-            'to_mid'=>$uid,
-            'type'=>1,
-            'status'=>1,
-            'content'=>'我们已经成为好友了，可以开始聊天了！',
-            'create_time'=>$time,
-            'update_time'=>$time,
-            'send_time'=>$time,
-        ]);
-    }*/
-
-    public function logout()
+    public function getMemberInfo()
     {
-
+        if($this->request->post()){
+            $param = $this->request->post();
+            $mid = $param['mid'];
+            $list = Db::table('df_member')->where('id',$mid)
+                ->field('id,username,nickname,signature,avatar')->find();
+            if(!empty($list)){
+                return json([
+                    'code'=>0,
+                    'data'=>$list
+                ]);
+            }else{
+                return json(['code'=>-1, 'error'=>'没有查询到该用户信息']);
+            }
+        }
     }
 }
